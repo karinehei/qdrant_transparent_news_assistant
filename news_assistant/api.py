@@ -219,7 +219,30 @@ def _remove_prompt_leakage(answer: str) -> str:
         "TÄYTYY",
     ]
     
-    lines = answer.split('\n')
+    result = answer
+    
+    # Remove instruction phrases from the text (case-insensitive, with word boundaries)
+    instruction_phrases_to_remove = [
+        (r"\bPAKOLLISET\s+LÄHTEET:?\s*", ""),
+        (r"\bKUNTAAN\s+", ""),
+        (r"\bKRIITTISET\s+SÄÄNNÖT\s*", ""),
+        (r"\bVASTAUSOHJE:?\s*", ""),
+        (r"\bOHJEET\s+VASTAUKSEEN\s*", ""),
+        (r"\bKäytä\s+suomeksi\s+ja\s+informatiivisesti\s*", ""),
+        (r"\bKäytä\s+suomeksi\s*", ""),
+        (r"\bVastaa\s+suomeksi\s+selkeästi\s*", ""),
+        (r"\bVastaa\s+suomeksi\s*", ""),
+    ]
+    
+    for phrase_pattern, replacement in instruction_phrases_to_remove:
+        result = re.sub(phrase_pattern, replacement, result, flags=re.IGNORECASE)
+    
+    # Clean up extra spaces
+    result = re.sub(r'\s+', ' ', result)
+    result = re.sub(r'\s+([.!?])', r'\1', result)
+    
+    # Remove lines that are purely instructional
+    lines = result.split('\n')
     cleaned_lines = []
     
     for line in lines:
@@ -228,26 +251,15 @@ def _remove_prompt_leakage(answer: str) -> str:
             cleaned_lines.append(line)
             continue
         
-        # Skip lines that match instruction markers
-        is_instruction = any(re.search(marker, line_stripped, re.IGNORECASE) for marker in instruction_markers)
+        line_upper = line_stripped.upper()
+        # Check if line contains instruction keywords
+        has_keyword = any(kw in line_upper for kw in instruction_keywords)
         
-        # Also check if line contains too many instruction keywords
-        keyword_count = sum(1 for kw in instruction_keywords if kw in line_stripped.upper())
-        is_instruction_heavy = keyword_count >= 2
+        # Check if line matches instruction markers
+        matches_marker = any(re.search(marker, line_stripped, re.IGNORECASE) for marker in instruction_markers)
         
-        # Also check for common instruction phrases that might not match regex exactly
-        line_lower = line_stripped.lower()
-        common_phrases = [
-            "käytä suomeksi",
-            "vastaa suomeksi",
-            "pakolliset",
-            "kuntaan",
-            "kriittiset",
-            "vastausohje",
-        ]
-        has_instruction_phrase = any(phrase in line_lower for phrase in common_phrases)
-        
-        if not is_instruction and not is_instruction_heavy and not has_instruction_phrase:
+        # Skip purely instructional lines
+        if not has_keyword and not matches_marker:
             cleaned_lines.append(line)
     
     result = '\n'.join(cleaned_lines).strip()

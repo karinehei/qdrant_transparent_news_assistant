@@ -12,7 +12,11 @@ INJECTION_PATTERNS = [
 
 def looks_like_prompt_injection(text: str) -> bool:
     t = text.lower()
-    return any(re.search(p, t, re.IGNORECASE) for p in INJECTION_PATTERNS)
+    # Check each pattern - some need word boundaries, others don't
+    for pattern in INJECTION_PATTERNS:
+        if re.search(pattern, t, re.IGNORECASE):
+            return True
+    return False
 
 def sanitize_context(text: str) -> str:
     # Keep it simple: strip excessive whitespace and truncate very long chunks

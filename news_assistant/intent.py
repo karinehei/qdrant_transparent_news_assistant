@@ -131,10 +131,12 @@ def extract_topic(query: str) -> Optional[str]:
             return topic
     
     # Pattern 3: "news about <topic>" / "news on <topic>"
-    match = re.search(r'news\s+(?:about|on|regarding)\s+(.+?)(?:\s|$)', query_lower, re.IGNORECASE)
+    # Use non-greedy match but capture until end of string or next major punctuation
+    match = re.search(r'news\s+(?:about|on|regarding)\s+(.+?)(?:[.!?]|$)', query_lower, re.IGNORECASE)
     if match:
         start, end = match.span(1)
         topic = query_original[start:end].strip()
+        # Remove trailing punctuation and stopwords, but preserve multi-word topics
         topic = re.sub(r'[.,!?;:]+$', '', topic)
         if topic and topic.lower() not in STOPWORDS_EN:
             return topic
