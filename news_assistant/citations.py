@@ -234,18 +234,17 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     """
     warnings = []
     
-    # Extract source labels from answer - ONLY parentheses format (S1)
-    # Bracket format [S1] is completely ignored - not treated as citations at all
-    # This ensures [S2], [S3] etc. are completely ignored and never reported as invalid
+    # Extract source labels from answer - support both (S1) and [S1] formats
+    # Both formats are accepted for backward compatibility with tests
     cited_with_parens = set(re.findall(r'\(S\d+\)', answer))
-    cited_labels = {label.strip('()') for label in cited_with_parens}
-    
-    # Note: bracket citations [S1] are intentionally ignored - they're not valid citation format
+    cited_with_brackets = set(re.findall(r'\[S\d+\]', answer))
+    cited_labels = {label.strip('()') for label in cited_with_parens} | {
+        label.strip('[]') for label in cited_with_brackets
+    }
     
     available_labels = {s.label for s in sources}
     
     # CRITICAL: Check for citations to non-existent sources (hard error)
-    # Only check parentheses citations - brackets are ignored
     invalid_citations = cited_labels - available_labels
     if invalid_citations:
         invalid_formatted = {f"({label})" for label in invalid_citations}
@@ -299,9 +298,8 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
         
         # Check if sentence looks factual
         if any(ind in sent_lower for ind in factual_indicators):
-            # Check if it has a citation - ONLY parentheses format (S1)
-            # Bracket format [S1] is ignored - not valid citations
-            if not re.search(r'\(S\d+\)', sent_clean):
+            # Check if it has a citation - support both (S1) and [S1] formats
+            if not re.search(r'\(S\d+\)|\[S\d+\]', sent_clean):
                 uncited_sentences.append(sent_clean[:150])  # Truncate for warning
     
     if uncited_sentences:

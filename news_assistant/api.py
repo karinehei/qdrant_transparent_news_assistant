@@ -260,10 +260,12 @@ def _remove_prompt_leakage(answer: str) -> str:
         
         # Check if line is a numbered instruction (e.g., "1. VASTAUS VAIN KONTEKSTISTA")
         # Match lines starting with number followed by instruction keywords
-        matches_numbered = bool(
-            re.match(r'^\d+\.\s+', line_stripped)
-            and any(kw in line_upper for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN"])
-        )
+        is_numbered_line = bool(re.match(r'^\d+\.\s+', line_stripped))
+        if is_numbered_line:
+            # If it's a numbered line, check if it contains instruction keywords
+            matches_numbered = any(kw in line_upper for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN"])
+        else:
+            matches_numbered = False
         
         # Skip purely instructional lines
         if not has_keyword and not matches_marker and not matches_numbered:
