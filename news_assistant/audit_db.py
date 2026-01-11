@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, select, Column
 from sqlalchemy import JSON as SQLJSON
+
 # Removed joinedload import - relationships are handled manually for compatibility
 
 class ChatRun(SQLModel, table=True):

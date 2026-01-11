@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 def _clean_html(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     # remove scripts/styles
-    for t in soup(["script","style","noscript"]):
+    for t in soup(["script", "style", "noscript"]):
         t.decompose()
     text = soup.get_text(" ", strip=True)
     return text
@@ -31,7 +31,7 @@ def fetch_rss(feed_url: str, publisher: str | None = None, limit: int = 30) -> L
         # try fetch full page (best-effort)
         if url:
             try:
-                r = requests.get(url, timeout=8, headers={"User-Agent":"Mozilla/5.0"})
+                r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
                 if r.ok and r.text:
                     page_text = _clean_html(r.text)
                     # only replace if significantly longer

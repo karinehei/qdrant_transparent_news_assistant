@@ -19,15 +19,22 @@ from .intent import sort_sources_by_timestamp, parse_query_intent, STOPWORDS_FI
 from .safety import sanitize_context, any_context_is_suspicious
 from .llm import LLM
 from .audit_db import (
-    get_engine, init_db, ChatRun, RetrievalHit, IngestionRun,
-    save_run, save_ingestion_run, list_runs, read_run
+    get_engine,
+    init_db,
+    ChatRun,
+    RetrievalHit,
+    IngestionRun,
+    save_run,
+    save_ingestion_run,
+    list_runs,
+    read_run,
 )
 from .schemas import IngestRequest, IngestResponse, ChatRequest, ChatResponse, SourceItem, HitItem, RunItem, DeleteArticleRequest, DeleteArticleResponse
 
 # Configure structured logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
@@ -118,7 +125,7 @@ def _remove_repetitions(text: str) -> str:
         elif not line_stripped:
             unique_lines.append(line)  # Keep empty lines
     
-    return '\n'.join(unique_lines)
+    return "\n".join(unique_lines)
 
 
 def _has_instruction_leakage(answer: str) -> bool:
@@ -127,8 +134,17 @@ def _has_instruction_leakage(answer: str) -> bool:
         return False
     
     leakage_markers = [
-        'PAKOLLISET', 'KUNTAAN', 'KRIITTISET', 'SULKEITA', 'HAKASULKEITA',
-        'VASTAUSOHJE', 'OHJEET', 'ÄLÄ', 'KÄYTÄ', 'TÄYTYY', 'System:'
+        "PAKOLLISET",
+        "KUNTAAN",
+        "KRIITTISET",
+        "SULKEITA",
+        "HAKASULKEITA",
+        "VASTAUSOHJE",
+        "OHJEET",
+        "ÄLÄ",
+        "KÄYTÄ",
+        "TÄYTYY",
+        "System:",
     ]
     
     answer_upper = answer.upper()
@@ -145,39 +161,47 @@ def _remove_prompt_leakage(answer: str) -> str:
     
     # Instruction markers that should never appear in user-facing answers
     instruction_markers = [
-        r'PAKOLLISET',
-        r'KUNTAAN',
-        r'KRIITTISET\s+SÄÄNNÖT',
-        r'VASTAUSOHJE',
-        r'OHJEET\s+VASTAUKSEEN',
-        r'KÄYTÄ\s+SULKEITA',
-        r'EI\s+HAKASULKEITA',
-        r'ÄLÄ\s+käytä',
-        r'ÄLÄ\s+keksi',
-        r'ÄLÄ\s+yritä',
-        r'ÄLÄ\s+toista',
-        r'^Käytä\s+suomeksi',
-        r'^Vastaa\s+suomeksi',
-        r'^Vastaa\s+selkeästi',
-        r'Käytä\s+suomeksi\s+ja\s+informatiivisesti',
-        r'Vastaa\s+suomeksi\s+selkeästi',
-        r'System:',
-        r'Assistant:',
-        r'User:',
-        r'^Ohje:',
-        r'^Muista:',
-        r'^Säännöt:',
-        r'^Esimerkki:',
-        r'^1\.\s+',
-        r'^2\.\s+',
-        r'^3\.\s+',
-        r'^4\.\s+',
+        r"PAKOLLISET",
+        r"KUNTAAN",
+        r"KRIITTISET\s+SÄÄNNÖT",
+        r"VASTAUSOHJE",
+        r"OHJEET\s+VASTAUKSEEN",
+        r"KÄYTÄ\s+SULKEITA",
+        r"EI\s+HAKASULKEITA",
+        r"ÄLÄ\s+käytä",
+        r"ÄLÄ\s+keksi",
+        r"ÄLÄ\s+yritä",
+        r"ÄLÄ\s+toista",
+        r"^Käytä\s+suomeksi",
+        r"^Vastaa\s+suomeksi",
+        r"^Vastaa\s+selkeästi",
+        r"Käytä\s+suomeksi\s+ja\s+informatiivisesti",
+        r"Vastaa\s+suomeksi\s+selkeästi",
+        r"System:",
+        r"Assistant:",
+        r"User:",
+        r"^Ohje:",
+        r"^Muista:",
+        r"^Säännöt:",
+        r"^Esimerkki:",
+        r"^1\.\s+",
+        r"^2\.\s+",
+        r"^3\.\s+",
+        r"^4\.\s+",
     ]
     
     # Also check for instruction keywords in the text
     instruction_keywords = [
-        'PAKOLLISET', 'KUNTAAN', 'KRIITTISET', 'SULKEITA', 'HAKASULKEITA',
-        'VASTAUSOHJE', 'OHJEET', 'ÄLÄ', 'KÄYTÄ', 'TÄYTYY'
+        "PAKOLLISET",
+        "KUNTAAN",
+        "KRIITTISET",
+        "SULKEITA",
+        "HAKASULKEITA",
+        "VASTAUSOHJE",
+        "OHJEET",
+        "ÄLÄ",
+        "KÄYTÄ",
+        "TÄYTYY",
     ]
     
     lines = answer.split('\n')
@@ -390,8 +414,22 @@ def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List
     
     # Find sentences with factual indicators but no citations
     factual_indicators = [
-        "on", "oli", "tapahtui", "sanoi", "kertoi", "mukaan", "vuonna", "vuosina",
-        "is", "was", "happened", "said", "according", "year", "syntyi", "kuoli"
+        "on",
+        "oli",
+        "tapahtui",
+        "sanoi",
+        "kertoi",
+        "mukaan",
+        "vuonna",
+        "vuosina",
+        "is",
+        "was",
+        "happened",
+        "said",
+        "according",
+        "year",
+        "syntyi",
+        "kuoli",
     ]
     
     uncited_sentences = []

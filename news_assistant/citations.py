@@ -246,9 +246,27 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
             sentence_pairs.append(sentences[i])
     
     factual_indicators = [
-        "on", "oli", "tapahtui", "sanoi", "kertoi", "mukaan", "vuonna", "vuosina",
-        "is", "was", "happened", "said", "according", "year", "percent", "%",
-        "tapahtui", "syntyi", "kuoli", "perustettiin", "julkaistiin"
+        "on",
+        "oli",
+        "tapahtui",
+        "sanoi",
+        "kertoi",
+        "mukaan",
+        "vuonna",
+        "vuosina",
+        "is",
+        "was",
+        "happened",
+        "said",
+        "according",
+        "year",
+        "percent",
+        "%",
+        "tapahtui",
+        "syntyi",
+        "kuoli",
+        "perustettiin",
+        "julkaistiin",
     ]
     
     uncited_sentences = []
