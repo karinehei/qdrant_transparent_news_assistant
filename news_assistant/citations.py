@@ -236,13 +236,11 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     
     # Extract source labels from answer - ONLY parentheses format (S1)
     # Bracket format [S1] is completely ignored - not treated as citations at all
+    # This ensures [S2], [S3] etc. are completely ignored and never reported as invalid
     cited_with_parens = set(re.findall(r'\(S\d+\)', answer))
     cited_labels = {label.strip('()') for label in cited_with_parens}
     
-    # Explicitly ignore bracket citations - they are NOT valid citations and should not be checked
-    # This ensures [S2], [S3] etc. are completely ignored and never reported as invalid
-    cited_with_brackets = set(re.findall(r'\[S\d+\]', answer))
-    # Bracket citations are intentionally ignored - do not add them to cited_labels
+    # Note: bracket citations [S1] are intentionally ignored - they're not valid citation format
     
     available_labels = {s.label for s in sources}
     
