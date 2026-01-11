@@ -4,6 +4,7 @@ import re
 import json
 import time
 from collections import Counter
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request
 from qdrant_client import QdrantClient
@@ -39,13 +40,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Transparent News Assistant", version="0.1.0")
-
-# Setup middleware
-setup_cors(app)
-app.add_middleware(RequestLoggingMiddleware)
-app.add_middleware(RateLimitMiddleware)
-
 # Lazy singletons - initialized on startup
 qdrant = QdrantClient(url=settings.qdrant_url)
 embed_model = SentenceTransformer(settings.embed_model)
@@ -55,8 +49,8 @@ engine = get_engine(settings.audit_db_url)
 init_db(engine)
 
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """Initialize Qdrant collection on application startup."""
     try:
         ensure_collection(
@@ -64,6 +58,15 @@ async def startup_event():
         )
     except Exception as e:
         logger.warning(f"Could not initialize Qdrant collection (may not be available): {e}")
+    yield
+
+
+app = FastAPI(title="Transparent News Assistant", version="0.1.0", lifespan=lifespan)
+
+# Setup middleware
+setup_cors(app)
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 def _remove_repetitions(text: str) -> str:
     """
@@ -183,7 +186,9 @@ def _remove_prompt_leakage(answer: str) -> str:
         r"ÄLÄ\s+yritä",
         r"ÄLÄ\s+toista",
         r"^Käytä\s+suomeksi",
+        r"Käytä\s+suomeksi",
         r"^Vastaa\s+suomeksi",
+        r"Vastaa\s+suomeksi",
         r"^Vastaa\s+selkeästi",
         r"Käytä\s+suomeksi\s+ja\s+informatiivisesti",
         r"Vastaa\s+suomeksi\s+selkeästi",
@@ -230,7 +235,19 @@ def _remove_prompt_leakage(answer: str) -> str:
         keyword_count = sum(1 for kw in instruction_keywords if kw in line_stripped.upper())
         is_instruction_heavy = keyword_count >= 2
         
-        if not is_instruction and not is_instruction_heavy:
+        # Also check for common instruction phrases that might not match regex exactly
+        line_lower = line_stripped.lower()
+        common_phrases = [
+            "käytä suomeksi",
+            "vastaa suomeksi",
+            "pakolliset",
+            "kuntaan",
+            "kriittiset",
+            "vastausohje",
+        ]
+        has_instruction_phrase = any(phrase in line_lower for phrase in common_phrases)
+        
+        if not is_instruction and not is_instruction_heavy and not has_instruction_phrase:
             cleaned_lines.append(line)
     
     result = '\n'.join(cleaned_lines).strip()

@@ -2,17 +2,17 @@ import re
 from typing import Iterable
 
 INJECTION_PATTERNS = [
-    r"ignore (all|previous) instructions",
-    r"system prompt",
-    r"developer message",
-    r"you are chatgpt",
-    r"do not cite",
+    r"ignore\s+(all|previous)\s+instructions",
+    r"system\s+prompt",
+    r"developer\s+message",
+    r"you\s+are\s+chatgpt",
+    r"do\s+not\s+cite",
     r"reveal.*(keys|secrets|prompt)",
 ]
 
 def looks_like_prompt_injection(text: str) -> bool:
     t = text.lower()
-    return any(re.search(p, t) for p in INJECTION_PATTERNS)
+    return any(re.search(p, t, re.IGNORECASE) for p in INJECTION_PATTERNS)
 
 def sanitize_context(text: str) -> str:
     # Keep it simple: strip excessive whitespace and truncate very long chunks

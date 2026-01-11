@@ -103,11 +103,13 @@ def compute_query_relevance(
     
     # Fallback: Token overlap (Jaccard similarity)
     query_tokens = set(re.findall(r'\w+', query.lower()))
-    text_tokens = set(re.findall(r'\w+', (hit_text + " " + hit_title).lower()))
+    text_lower = (hit_text + " " + hit_title).lower()
+    text_tokens = set(re.findall(r'\w+', text_lower))
     
     if not query_tokens:
         return 0.0
     
+    # Direct token overlap
     overlap = len(query_tokens & text_tokens)
     union = len(query_tokens | text_tokens)
     
@@ -117,11 +119,18 @@ def compute_query_relevance(
     jaccard = overlap / union
     
     # Boost if query tokens appear multiple times
-    text_lower = (hit_text + " " + hit_title).lower()
     token_counts = sum(text_lower.count(token) for token in query_tokens)
     tf_boost = min(1.0, token_counts / (len(query_tokens) * 2))
     
-    token_relevance = 0.7 * jaccard + 0.3 * tf_boost
+    # Additional boost for partial matches (e.g., "usa" matches "USA", "kiina" might match "china" in some contexts)
+    # For now, just use direct token matching, but give higher weight to matches
+    base_relevance = 0.6 * jaccard + 0.4 * tf_boost
+    
+    # If we have some overlap, ensure minimum relevance
+    if overlap > 0:
+        base_relevance = max(base_relevance, 0.2)  # At least 0.2 if any tokens match
+    
+    token_relevance = base_relevance
     
     # If we have vector score, combine it with token relevance
     if vector_weight > 0:
@@ -216,16 +225,13 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     """
     warnings = []
     
-    # Extract source labels from answer - ONLY parentheses format (S1)
-    # Ignore bracket format [S1] completely - treat as plain text
+    # Extract source labels from answer - support both (S1) and [S1] formats
+    # Prefer parentheses format, but also accept bracket format for backward compatibility
     cited_with_parens = set(re.findall(r'\(S\d+\)', answer))
-    cited_labels = {label.strip('()') for label in cited_with_parens}
-    
-    # Also check for bracket format but DON'T treat as citations - just warn if found
     cited_with_brackets = set(re.findall(r'\[S\d+\]', answer))
-    if cited_with_brackets:
-        # These are not valid citations, but we'll ignore them (not add to cited_labels)
-        pass
+    cited_labels = {label.strip('()') for label in cited_with_parens} | {
+        label.strip('[]') for label in cited_with_brackets
+    }
     available_labels = {s.label for s in sources}
     
     # CRITICAL: Check for citations to non-existent sources (hard error)
@@ -282,9 +288,8 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
         
         # Check if sentence looks factual
         if any(ind in sent_lower for ind in factual_indicators):
-            # Check if it has a citation - ONLY parentheses format (S1)
-            # Ignore bracket format [S1] - it's not a valid citation
-            if not re.search(r'\(S\d+\)', sent_clean):
+            # Check if it has a citation - support both (S1) and [S1] formats
+            if not re.search(r'\(S\d+\)|\[S\d+\]', sent_clean):
                 uncited_sentences.append(sent_clean[:150])  # Truncate for warning
     
     if uncited_sentences:

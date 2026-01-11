@@ -108,36 +108,42 @@ def extract_topic(query: str) -> Optional[str]:
         Topic string or None if no topic detected
     """
     query_lower = query.lower().strip()
+    query_original = query.strip()
     
     # Pattern 1: "uutiset <topic>" / "uutisia <topic>"
-    match = re.search(r'uutiset\s+(.+?)(?:\s|$)', query_lower)
+    match = re.search(r'uutiset\s+(.+?)(?:\s|$)', query_lower, re.IGNORECASE)
     if match:
-        topic = match.group(1).strip()
+        # Extract from original query to preserve case
+        start, end = match.span(1)
+        topic = query_original[start:end].strip()
         # Remove trailing punctuation and stopwords
         topic = re.sub(r'[.,!?;:]+$', '', topic)
-        if topic and topic not in STOPWORDS_FI:
+        if topic and topic.lower() not in STOPWORDS_FI:
             return topic
     
     # Pattern 2: "<topic> uutiset" / "<topic> uutisia"
-    match = re.search(r'^(.+?)\s+uutiset', query_lower)
+    match = re.search(r'^(.+?)\s+uutiset', query_lower, re.IGNORECASE)
     if match:
-        topic = match.group(1).strip()
+        start, end = match.span(1)
+        topic = query_original[start:end].strip()
         topic = re.sub(r'[.,!?;:]+$', '', topic)
-        if topic and topic not in STOPWORDS_FI:
+        if topic and topic.lower() not in STOPWORDS_FI:
             return topic
     
     # Pattern 3: "news about <topic>" / "news on <topic>"
-    match = re.search(r'news\s+(?:about|on|regarding)\s+(.+?)(?:\s|$)', query_lower)
+    match = re.search(r'news\s+(?:about|on|regarding)\s+(.+?)(?:\s|$)', query_lower, re.IGNORECASE)
     if match:
-        topic = match.group(1).strip()
+        start, end = match.span(1)
+        topic = query_original[start:end].strip()
         topic = re.sub(r'[.,!?;:]+$', '', topic)
-        if topic and topic not in STOPWORDS_EN:
+        if topic and topic.lower() not in STOPWORDS_EN:
             return topic
     
     # Pattern 4: "aihe: <topic>" / "topic: <topic>"
-    match = re.search(r'(?:aihe|topic):\s*(.+?)(?:\s|$)', query_lower)
+    match = re.search(r'(?:aihe|topic):\s*(.+?)(?:\s|$)', query_lower, re.IGNORECASE)
     if match:
-        topic = match.group(1).strip()
+        start, end = match.span(1)
+        topic = query_original[start:end].strip()
         topic = re.sub(r'[.,!?;:]+$', '', topic)
         if topic:
             return topic
