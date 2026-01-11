@@ -230,7 +230,39 @@ def _remove_prompt_leakage(answer: str) -> str:
 
     result = answer
 
-    # Remove instruction phrases from the text (case-insensitive, with word boundaries)
+    # First, remove lines that are purely instructional (including numbered lists)
+    # Do this BEFORE regex substitutions to catch numbered instructions
+    lines = answer.split("\n")
+    cleaned_lines = []
+
+    for line in lines:
+        line_stripped = line.strip()
+        if not line_stripped:
+            cleaned_lines.append(line)
+            continue
+
+        line_upper = line_stripped.upper()
+        # Check if line contains instruction keywords
+        has_keyword = any(kw in line_upper for kw in instruction_keywords)
+
+        # Check if line matches instruction markers
+        matches_marker = any(re.search(marker, line_stripped, re.IGNORECASE) for marker in instruction_markers)
+
+        # Check if line is a numbered instruction (e.g., "1. VASTAUS VAIN KONTEKSTISTA")
+        is_numbered_line = bool(re.match(r"^\d+\.\s+", line_stripped))
+        if is_numbered_line:
+            # If it's a numbered line, check if it contains instruction keywords
+            matches_numbered = any(kw in line_upper for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN"])
+        else:
+            matches_numbered = False
+
+        # Skip purely instructional lines
+        if not has_keyword and not matches_marker and not matches_numbered:
+            cleaned_lines.append(line)
+
+    result = "\n".join(cleaned_lines)
+
+    # Remove instruction phrases from remaining text (case-insensitive, with word boundaries)
     instruction_phrases_to_remove = [
         (r"\bPAKOLLISET\s+LÄHTEET:?\s*", ""),
         (r"\bKUNTAAN\s+", ""),
@@ -249,36 +281,6 @@ def _remove_prompt_leakage(answer: str) -> str:
     # Clean up extra spaces
     result = re.sub(r"\s+", " ", result)
     result = re.sub(r"\s+([.!?])", r"\1", result)
-
-    # Remove lines that are purely instructional (including numbered lists)
-    lines = result.split("\n")
-    cleaned_lines = []
-
-    for line in lines:
-        line_stripped = line.strip()
-        if not line_stripped:
-            cleaned_lines.append(line)
-            continue
-
-        line_upper = line_stripped.upper()
-        # Check if line contains instruction keywords
-        has_keyword = any(kw in line_upper for kw in instruction_keywords)
-
-        # Check if line matches instruction markers
-        matches_marker = any(re.search(marker, line_stripped, re.IGNORECASE) for marker in instruction_markers)
-
-        # Check if line is a numbered instruction (e.g., "1. VASTAUS VAIN KONTEKSTISTA")
-        # Match lines starting with number followed by instruction keywords
-        is_numbered_line = bool(re.match(r"^\d+\.\s+", line_stripped))
-        if is_numbered_line:
-            # If it's a numbered line, check if it contains instruction keywords
-            matches_numbered = any(kw in line_upper for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN"])
-        else:
-            matches_numbered = False
-
-        # Skip purely instructional lines
-        if not has_keyword and not matches_marker and not matches_numbered:
-            cleaned_lines.append(line)
 
     result = "\n".join(cleaned_lines).strip()
 
