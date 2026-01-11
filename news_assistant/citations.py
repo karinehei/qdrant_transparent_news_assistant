@@ -104,13 +104,16 @@ def compute_query_relevance(
     # Fallback: Token overlap (Jaccard similarity)
     query_tokens = set(re.findall(r'\w+', query.lower()))
     text_lower = (hit_text + " " + hit_title).lower()
+    title_lower = hit_title.lower()
     text_tokens = set(re.findall(r'\w+', text_lower))
+    title_tokens = set(re.findall(r'\w+', title_lower))
     
     if not query_tokens:
         return 0.0
     
     # Direct token overlap
     overlap = len(query_tokens & text_tokens)
+    title_overlap = len(query_tokens & title_tokens)
     union = len(query_tokens | text_tokens)
     
     if union == 0:
@@ -122,15 +125,21 @@ def compute_query_relevance(
     token_counts = sum(text_lower.count(token) for token in query_tokens)
     tf_boost = min(1.0, token_counts / (len(query_tokens) * 2))
     
-    # Additional boost for partial matches (e.g., "usa" matches "USA", "kiina" might match "china" in some contexts)
-    # For now, just use direct token matching, but give higher weight to matches
-    base_relevance = 0.6 * jaccard + 0.4 * tf_boost
+    # Title matches are very important - give high boost
+    title_boost = (title_overlap / len(query_tokens)) * 0.5 if query_tokens else 0.0
     
-    # If we have some overlap, ensure minimum relevance
-    if overlap > 0:
-        base_relevance = max(base_relevance, 0.2)  # At least 0.2 if any tokens match
+    # Calculate base relevance with multiple signals
+    base_relevance = 0.5 * jaccard + 0.3 * tf_boost + 0.2 * title_boost
     
-    token_relevance = base_relevance
+    # If we have significant overlap (especially in title), boost more
+    if title_overlap >= len(query_tokens) * 0.5:  # At least half of query tokens in title
+        base_relevance = max(base_relevance, 0.5)
+    elif overlap > 0:
+        # If any tokens match, ensure minimum relevance based on match ratio
+        match_ratio = overlap / len(query_tokens)
+        base_relevance = max(base_relevance, 0.2 + (match_ratio * 0.3))  # 0.2 to 0.5 range
+    
+    token_relevance = min(1.0, base_relevance)  # Cap at 1.0
     
     # If we have vector score, combine it with token relevance
     if vector_weight > 0:
@@ -225,14 +234,13 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     """
     warnings = []
     
-    # Extract source labels from answer - ONLY parentheses format (S1)
-    # Ignore bracket format [S1] completely - treat as plain text (for backward compatibility in display, but not as citations)
+    # Extract source labels from answer - support both (S1) and [S1] formats
+    # Both formats are accepted for backward compatibility
     cited_with_parens = set(re.findall(r'\(S\d+\)', answer))
-    cited_labels = {label.strip('()') for label in cited_with_parens}
-    
-    # Also check for bracket format but DON'T treat as citations - just note them for potential cleanup
     cited_with_brackets = set(re.findall(r'\[S\d+\]', answer))
-    # Bracket citations are ignored - they're not valid citation format
+    cited_labels = {label.strip('()') for label in cited_with_parens} | {
+        label.strip('[]') for label in cited_with_brackets
+    }
     available_labels = {s.label for s in sources}
     
     # CRITICAL: Check for citations to non-existent sources (hard error)
@@ -289,9 +297,8 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
         
         # Check if sentence looks factual
         if any(ind in sent_lower for ind in factual_indicators):
-            # Check if it has a citation - ONLY parentheses format (S1)
-            # Ignore bracket format [S1] - it's not a valid citation
-            if not re.search(r'\(S\d+\)', sent_clean):
+            # Check if it has a citation - support both (S1) and [S1] formats
+            if not re.search(r'\(S\d+\)|\[S\d+\]', sent_clean):
                 uncited_sentences.append(sent_clean[:150])  # Truncate for warning
     
     if uncited_sentences:

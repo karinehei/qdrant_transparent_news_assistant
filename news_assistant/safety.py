@@ -2,7 +2,8 @@ import re
 from typing import Iterable
 
 INJECTION_PATTERNS = [
-    r"ignore\s+(all|previous)\s+instructions",
+    r"ignore\s+(all\s+)?previous\s+instructions",
+    r"ignore\s+all\s+instructions",
     r"system\s+prompt",
     r"developer\s+message",
     r"you\s+are\s+chatgpt",
@@ -12,7 +13,7 @@ INJECTION_PATTERNS = [
 
 def looks_like_prompt_injection(text: str) -> bool:
     t = text.lower()
-    # Check each pattern - some need word boundaries, others don't
+    # Check each pattern
     for pattern in INJECTION_PATTERNS:
         if re.search(pattern, t, re.IGNORECASE):
             return True

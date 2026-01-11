@@ -232,10 +232,12 @@ def _remove_prompt_leakage(answer: str) -> str:
         (r"\bKäytä\s+suomeksi\s*", ""),
         (r"\bVastaa\s+suomeksi\s+selkeästi\s*", ""),
         (r"\bVastaa\s+suomeksi\s*", ""),
+        (r"^\d+\.\s+VASTAUS\s+VAIN\s+KONTEKSTISTA\s*", ""),  # Remove numbered instruction lines
+        (r"^\d+\.\s+PAKOLLISET\s+LÄHTEET\s*", ""),
     ]
     
     for phrase_pattern, replacement in instruction_phrases_to_remove:
-        result = re.sub(phrase_pattern, replacement, result, flags=re.IGNORECASE)
+        result = re.sub(phrase_pattern, replacement, result, flags=re.IGNORECASE | re.MULTILINE)
     
     # Clean up extra spaces
     result = re.sub(r'\s+', ' ', result)
@@ -255,11 +257,12 @@ def _remove_prompt_leakage(answer: str) -> str:
         # Check if line contains instruction keywords
         has_keyword = any(kw in line_upper for kw in instruction_keywords)
         
-        # Check if line matches instruction markers
+        # Check if line matches instruction markers (including numbered lists)
         matches_marker = any(re.search(marker, line_stripped, re.IGNORECASE) for marker in instruction_markers)
+        matches_numbered = re.match(r'^\d+\.\s+(VASTAUS|PAKOLLISET|KRIITTISET)', line_upper)
         
         # Skip purely instructional lines
-        if not has_keyword and not matches_marker:
+        if not has_keyword and not matches_marker and not matches_numbered:
             cleaned_lines.append(line)
     
     result = '\n'.join(cleaned_lines).strip()
