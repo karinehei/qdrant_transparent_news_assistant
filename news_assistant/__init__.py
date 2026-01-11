@@ -1,0 +1,1 @@
+# Transparent News Assistant package

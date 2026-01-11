@@ -3,14 +3,26 @@ qdrant-client>=1.7.0
 sentence-transformers>=2.2.0
 numpy>=1.24.0
 
-# LLM integration
-mistralai>=1.0.0
+# LLM integration (optional - only needed for Mistral provider)
+# mistralai>=1.0.0  # Uncomment if using Mistral API
 python-dotenv>=1.0.0
 
 # Optional dependencies for hybrid search
 rank-bm25>=0.2.2
 
-# Development dependencies (optional)
-# pytest>=7.4.0
-# black>=23.0.0
-# mypy>=1.5.0
+# API + audit + ingestion (Transparent News Assistant)
+fastapi>=0.110.0
+uvicorn>=0.27.0
+sqlmodel>=0.0.16
+pydantic-settings>=2.2.1
+feedparser>=6.0.11
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
+
+# Development dependencies
+pytest>=7.4.0
+black>=23.0.0
+mypy>=1.5.0
+ruff>=0.1.0

@@ -6,7 +6,7 @@ A complete Retrieval-Augmented Generation pipeline featuring:
 - Semantic search with MMR (Maximal Marginal Relevance)
 - Cross-encoder reranking
 - Deduplication strategies
-- LLM integration with Mistral AI
+- LLM integration (vLLM, Ollama, or Mistral API)
 - Evaluation metrics (recall@k, nDCG@k, latency, groundedness)
 
 Author: Senior AI Engineer
@@ -15,7 +15,6 @@ Author: Senior AI Engineer
 import sys
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer, CrossEncoder
-from mistralai import Mistral
 from dotenv import load_dotenv
 import os
 
@@ -28,6 +27,10 @@ from prompting import build_prompt
 from utils.metrics_relevance import eval_query
 from utils.latency_utils import measure_latency
 from utils.groundedness_proxy import groundedness_proxy
+
+# Import LLM abstraction from news_assistant
+from news_assistant.llm import LLM
+from news_assistant.settings import Settings
 
 # ---------- Main ----------
 
@@ -52,8 +55,16 @@ def main():
         - Groundedness check results
     
     Environment:
-        Requires MISTRAL_API_KEY environment variable or .env file.
+        Requires LLM configuration in .env file:
+        - LLM_PROVIDER: "vllm", "ollama", or "mistral"
+        - For Mistral: MISTRAL_API_KEY required
+        - For vLLM: VLLM_BASE_URL (default: http://localhost:8001)
+        - For Ollama: OLLAMA_BASE_URL (default: http://localhost:11434)
     """
+    # Load settings
+    load_dotenv()
+    settings = Settings()
+    
     # Mallit
     model = SentenceTransformer(EMBED_MODEL)
     cross_encoder = CrossEncoder(RERANK_MODEL)  # kevyt rerankkeri
@@ -112,21 +123,42 @@ def main():
     print("\n== Generointiprompt (syötä LLM:lle) ==\n")
     print(prompt)
 
-    load_dotenv()
-    api_key = os.getenv("MISTRAL_API_KEY")
-    if not api_key:
-        sys.exit("Missing MISTRAL_API_KEY environment variable. Please set it first.")
+    # Initialize LLM based on settings
+    try:
+        if settings.llm_provider == "mistral":
+            if not settings.mistral_api_key:
+                sys.exit("Missing MISTRAL_API_KEY. Set LLM_PROVIDER=vllm or LLM_PROVIDER=ollama for free options.")
+            llm = LLM(
+                provider="mistral",
+                model=settings.mistral_model,
+                api_key=settings.mistral_api_key,
+            )
+        elif settings.llm_provider == "vllm":
+            llm = LLM(
+                provider="vllm",
+                model=settings.vllm_model,
+                base_url=settings.vllm_base_url,
+            )
+        elif settings.llm_provider == "ollama":
+            llm = LLM(
+                provider="ollama",
+                model=settings.ollama_model,
+                base_url=settings.ollama_base_url,
+            )
+        else:
+            sys.exit(f"Unknown LLM_PROVIDER: {settings.llm_provider}. Use 'vllm', 'ollama', or 'mistral'.")
+    except Exception as e:
+        sys.exit(f"Failed to initialize LLM: {e}")
 
-    with Mistral(api_key=api_key) as client_llm:
-        resp = client_llm.chat.complete(
-            model="open-mistral-nemo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,   # tiukempi kieli, vähemmän jaarittelua
-            max_tokens=500,    # ↑ vähentää kesken katkeamista
-        )
+    print(f"\n== Using LLM provider: {settings.llm_provider} ==\n")
+    
+    # Generate response
+    try:
+        out = llm.generate(prompt, max_tokens=500)
+    except Exception as e:
+        sys.exit(f"LLM generation failed: {e}")
 
     print("\n== LLM-vastaus ==\n")
-    out = resp.choices[0].message.content
 
     # Varmuuskatkaisin: lisää Lähteet:, jos malli unohti
     if "Lähteet:" not in out:

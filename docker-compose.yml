@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: news_postgres
+    environment:
+      POSTGRES_USER: news_user
+      POSTGRES_PASSWORD: news_pass
+      POSTGRES_DB: news_audit
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U news_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: news_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news_api
+    ports:
+      - "8000:8000"
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - AUDIT_DB_URL=postgresql://news_user:news_pass@postgres:5432/news_audit
+      # LLM configuration (vLLM by default for best performance, Ollama/Mistral optional)
+      - LLM_PROVIDER=${LLM_PROVIDER:-vllm}
+      - VLLM_BASE_URL=http://host.docker.internal:8001
+      - VLLM_MODEL=${VLLM_MODEL:-microsoft/Phi-3-mini-4k-instruct}
+      # Uncomment if using Ollama instead:
+      # - OLLAMA_MODEL=${OLLAMA_MODEL:-phi:latest}
+      # - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # Uncomment if using Mistral API:
+      # - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - ./news_assistant:/app/news_assistant
+      - ./tests:/app/tests
+    command: uvicorn news_assistant.api:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  qdrant_data:
+

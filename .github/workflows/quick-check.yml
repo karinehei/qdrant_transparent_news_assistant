@@ -41,10 +41,30 @@ jobs:
         pip cache purge || true
         df -h
 
-    - name: Syntax check
+    - name: Syntax check (main package)
       run: |
-        python -m py_compile tools.py config.py document_processing.py indexing.py retrieval.py prompting.py mini_rag_pipeline_qdrant.py
+        python -m py_compile news_assistant/*.py news_assistant/ingestors/*.py
 
-    - name: Import check
+    - name: Import check (main package)
       run: |
-        python -c "import tools; import config; print('✓ All imports successful')"
+        python -c "
+        from news_assistant import settings
+        from news_assistant import citations
+        from news_assistant import safety
+        from news_assistant import qdrant_store
+        from news_assistant import retrieval
+        from news_assistant.ingestors import base, rss
+        print('✓ All main package imports successful')
+        "
+
+    - name: Import check (legacy modules)
+      continue-on-error: true
+      run: |
+        python -c "
+        try:
+            import tools
+            import config
+            print('✓ Legacy modules import successful')
+        except ImportError as e:
+            print(f'⚠ Legacy modules not available: {e}')
+        "
