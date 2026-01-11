@@ -11,6 +11,7 @@ INJECTION_PATTERNS = [
     r"reveal.*(keys|secrets|prompt)",
 ]
 
+
 def looks_like_prompt_injection(text: str) -> bool:
     t = text.lower()
     # Check each pattern

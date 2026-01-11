@@ -1,4 +1,5 @@
 """Middleware for rate limiting, CORS, and request logging."""
+
 from __future__ import annotations
 import time
 import logging
@@ -20,18 +21,15 @@ _rate_limit_max_requests = 100
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple rate limiting middleware."""
-    
+
     async def dispatch(self, request: Request, call_next: Callable):
         # Get client identifier (IP address)
         client_id = request.client.host if request.client else "unknown"
-        
+
         # Clean old entries
         now = datetime.utcnow()
-        _rate_limit_store[client_id] = [
-            ts for ts in _rate_limit_store[client_id]
-            if now - ts < _rate_limit_window
-        ]
-        
+        _rate_limit_store[client_id] = [ts for ts in _rate_limit_store[client_id] if now - ts < _rate_limit_window]
+
         # Check rate limit
         if len(_rate_limit_store[client_id]) >= _rate_limit_max_requests:
             return Response(
@@ -39,22 +37,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 status_code=429,
                 headers={"Retry-After": "60"},
             )
-        
+
         # Record request
         _rate_limit_store[client_id].append(now)
-        
+
         response = await call_next(request)
         return response
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Structured logging middleware with request IDs."""
-    
+
     async def dispatch(self, request: Request, call_next: Callable):
         # Generate request ID
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
-        
+
         # Log request
         start_time = time.time()
         logger.info(
@@ -66,11 +64,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "client_ip": request.client.host if request.client else None,
             },
         )
-        
+
         try:
             response = await call_next(request)
             latency_ms = (time.time() - start_time) * 1000
-            
+
             logger.info(
                 f"request_completed request_id={request_id} status={response.status_code} latency_ms={latency_ms:.2f}",
                 extra={
@@ -79,11 +77,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "latency_ms": latency_ms,
                 },
             )
-            
+
             # Add request ID to response headers
             response.headers["X-Request-ID"] = request_id
             return response
-            
+
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000
             logger.error(

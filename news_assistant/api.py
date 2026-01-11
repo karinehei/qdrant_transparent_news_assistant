@@ -30,7 +30,17 @@ from .audit_db import (
     list_runs,
     read_run,
 )
-from .schemas import IngestRequest, IngestResponse, ChatRequest, ChatResponse, SourceItem, HitItem, RunItem, DeleteArticleRequest, DeleteArticleResponse
+from .schemas import (
+    IngestRequest,
+    IngestResponse,
+    ChatRequest,
+    ChatResponse,
+    SourceItem,
+    HitItem,
+    RunItem,
+    DeleteArticleRequest,
+    DeleteArticleResponse,
+)
 
 # Configure structured logging
 logging.basicConfig(
@@ -53,9 +63,7 @@ init_db(engine)
 async def lifespan(app: FastAPI):
     """Initialize Qdrant collection on application startup."""
     try:
-        ensure_collection(
-            qdrant, settings.qdrant_collection, dim=embed_model.get_sentence_embedding_dimension()
-        )
+        ensure_collection(qdrant, settings.qdrant_collection, dim=embed_model.get_sentence_embedding_dimension())
     except Exception as e:
         logger.warning(f"Could not initialize Qdrant collection (may not be available): {e}")
     yield
@@ -68,6 +76,7 @@ setup_cors(app)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
+
 def _remove_repetitions(text: str) -> str:
     """
     Remove obvious word/phrase repetitions that indicate the LLM got stuck in a loop.
@@ -76,7 +85,7 @@ def _remove_repetitions(text: str) -> str:
     """
     if not text:
         return text
-    
+
     # First, use regex to find and remove obvious word repetitions (same word 3+ times in a row)
     # Pattern: word followed by space and same word repeated 2+ more times
     # This catches cases like "kansainvälisen kansainvälisen kansainvälisen..."
@@ -89,12 +98,12 @@ def _remove_repetitions(text: str) -> str:
             logger.warning(f"Removed {repeats} repetitions of word '{word}'")
             return word  # Keep only first occurrence
         return full_match  # Keep as-is if less than 3 repeats
-    
+
     # Match word followed by same word 2+ times (with spaces)
     # \b ensures word boundaries
-    pattern = r'\b(\w+)(?:\s+\1){2,}'
+    pattern = r"\b(\w+)(?:\s+\1){2,}"
     text = re.sub(pattern, remove_word_repetition, text)
-    
+
     # Also handle phrase repetitions (2-3 word phrases)
     words = text.split()
     if len(words) >= 6:
@@ -103,31 +112,31 @@ def _remove_repetitions(text: str) -> str:
         while i < len(words):
             # Check for 2-word phrase repetition
             if i + 6 <= len(words):
-                phrase = " ".join(words[i:i+2])
+                phrase = " ".join(words[i : i + 2])
                 # Check if this phrase repeats
                 repeat_count = 1
                 j = i + 2
                 while j + 2 <= len(words):
-                    next_phrase = " ".join(words[j:j+2])
+                    next_phrase = " ".join(words[j : j + 2])
                     if next_phrase == phrase:
                         repeat_count += 1
                         j += 2
                     else:
                         break
-                
+
                 if repeat_count >= 3:
                     # Found repeating phrase, keep only first occurrence
-                    result.extend(words[i:i+2])
+                    result.extend(words[i : i + 2])
                     i = j
                     logger.warning(f"Removed {repeat_count} repetitions of phrase '{phrase}'")
                     continue
-            
+
             result.append(words[i])
             i += 1
         text = " ".join(result)
-    
+
     # Remove duplicate lines (same line repeated)
-    lines = text.split('\n')
+    lines = text.split("\n")
     seen_lines = set()
     unique_lines = []
     for line in lines:
@@ -137,7 +146,7 @@ def _remove_repetitions(text: str) -> str:
             unique_lines.append(line)
         elif not line_stripped:
             unique_lines.append(line)  # Keep empty lines
-    
+
     return "\n".join(unique_lines)
 
 
@@ -145,7 +154,7 @@ def _has_instruction_leakage(answer: str) -> bool:
     """Check if answer contains instruction leakage markers."""
     if not answer:
         return False
-    
+
     leakage_markers = [
         "PAKOLLISET",
         "KUNTAAN",
@@ -159,7 +168,7 @@ def _has_instruction_leakage(answer: str) -> bool:
         "TÄYTYY",
         "System:",
     ]
-    
+
     answer_upper = answer.upper()
     return any(marker in answer_upper for marker in leakage_markers)
 
@@ -171,7 +180,7 @@ def _remove_prompt_leakage(answer: str) -> str:
     """
     if not answer:
         return answer
-    
+
     # Instruction markers that should never appear in user-facing answers
     instruction_markers = [
         r"PAKOLLISET",
@@ -204,7 +213,7 @@ def _remove_prompt_leakage(answer: str) -> str:
         r"^3\.\s+",
         r"^4\.\s+",
     ]
-    
+
     # Also check for instruction keywords in the text
     instruction_keywords = [
         "PAKOLLISET",
@@ -218,9 +227,9 @@ def _remove_prompt_leakage(answer: str) -> str:
         "KÄYTÄ",
         "TÄYTYY",
     ]
-    
+
     result = answer
-    
+
     # Remove instruction phrases from the text (case-insensitive, with word boundaries)
     instruction_phrases_to_remove = [
         (r"\bPAKOLLISET\s+LÄHTEET:?\s*", ""),
@@ -233,96 +242,96 @@ def _remove_prompt_leakage(answer: str) -> str:
         (r"\bVastaa\s+suomeksi\s+selkeästi\s*", ""),
         (r"\bVastaa\s+suomeksi\s*", ""),
     ]
-    
+
     for phrase_pattern, replacement in instruction_phrases_to_remove:
         result = re.sub(phrase_pattern, replacement, result, flags=re.IGNORECASE | re.MULTILINE)
-    
+
     # Clean up extra spaces
-    result = re.sub(r'\s+', ' ', result)
-    result = re.sub(r'\s+([.!?])', r'\1', result)
-    
+    result = re.sub(r"\s+", " ", result)
+    result = re.sub(r"\s+([.!?])", r"\1", result)
+
     # Remove lines that are purely instructional (including numbered lists)
-    lines = result.split('\n')
+    lines = result.split("\n")
     cleaned_lines = []
-    
+
     for line in lines:
         line_stripped = line.strip()
         if not line_stripped:
             cleaned_lines.append(line)
             continue
-        
+
         line_upper = line_stripped.upper()
         # Check if line contains instruction keywords
         has_keyword = any(kw in line_upper for kw in instruction_keywords)
-        
+
         # Check if line matches instruction markers
         matches_marker = any(re.search(marker, line_stripped, re.IGNORECASE) for marker in instruction_markers)
-        
+
         # Check if line is a numbered instruction (e.g., "1. VASTAUS VAIN KONTEKSTISTA")
         # Match lines starting with number followed by instruction keywords
-        is_numbered_line = bool(re.match(r'^\d+\.\s+', line_stripped))
+        is_numbered_line = bool(re.match(r"^\d+\.\s+", line_stripped))
         if is_numbered_line:
             # If it's a numbered line, check if it contains instruction keywords
             matches_numbered = any(kw in line_upper for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN"])
         else:
             matches_numbered = False
-        
+
         # Skip purely instructional lines
         if not has_keyword and not matches_marker and not matches_numbered:
             cleaned_lines.append(line)
-    
-    result = '\n'.join(cleaned_lines).strip()
-    
+
+    result = "\n".join(cleaned_lines).strip()
+
     # If we removed too much (answer is too short), return original
     if len(result) < len(answer) * 0.3:
         return answer
-    
+
     # Final check: if result still contains instruction keywords, try to extract just the answer part
-    if any(kw in result.upper() for kw in ['PAKOLLISET', 'KUNTAAN', 'KRIITTISET']):
+    if any(kw in result.upper() for kw in ["PAKOLLISET", "KUNTAAN", "KRIITTISET"]):
         # Try to find where the actual answer starts (after instruction blocks)
-        lines_result = result.split('\n')
+        lines_result = result.split("\n")
         answer_start = 0
         for i, line in enumerate(lines_result):
-            if any(kw in line.upper() for kw in ['PAKOLLISET', 'KUNTAAN', 'KRIITTISET', 'VASTAUSOHJE', 'SÄÄNNÖT']):
+            if any(kw in line.upper() for kw in ["PAKOLLISET", "KUNTAAN", "KRIITTISET", "VASTAUSOHJE", "SÄÄNNÖT"]):
                 answer_start = i + 1
                 break
         if answer_start > 0:
-            result = '\n'.join(lines_result[answer_start:]).strip()
-    
+            result = "\n".join(lines_result[answer_start:]).strip()
+
     # Remove any remaining instruction-like patterns
     # Remove lines that are just numbers or bullet points with instructions
     final_lines = []
-    for line in result.split('\n'):
+    for line in result.split("\n"):
         line_stripped = line.strip()
         # Skip lines that are just instruction patterns
-        if re.match(r'^[0-9]+\.\s*[A-ZÄÖÅ]', line_stripped):
+        if re.match(r"^[0-9]+\.\s*[A-ZÄÖÅ]", line_stripped):
             continue  # Skip numbered instruction lines
-        if re.match(r'^-\s*[A-ZÄÖÅ]', line_stripped) and any(kw in line_stripped.upper() for kw in ['KÄYTÄ', 'ÄLÄ', 'TÄYTYY']):
+        if re.match(r"^-\s*[A-ZÄÖÅ]", line_stripped) and any(kw in line_stripped.upper() for kw in ["KÄYTÄ", "ÄLÄ", "TÄYTYY"]):
             continue  # Skip bullet instruction lines
         final_lines.append(line)
-    
-    result = '\n'.join(final_lines).strip()
-    
+
+    result = "\n".join(final_lines).strip()
+
     return result
 
 
 def _parse_structured_output(answer_raw: str, sources: List[SourceRef]) -> tuple[str, List[str]]:
     """
     Parse structured JSON output from LLM.
-    
+
     Expected format:
     {
       "answer_fi": ["bullet 1 (S1)", "bullet 2 (S2)", ...],
       "sources_used": ["S1", "S2", ...]
     }
-    
+
     Returns:
         (formatted_answer, sources_used_list) or (None, []) if parsing fails
     """
-    
+
     # Try to extract JSON from answer
     # Look for JSON block (may be wrapped in markdown code blocks)
-    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', answer_raw, re.DOTALL)
+    json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", answer_raw, re.DOTALL)
     if json_match:
         json_str = json_match.group(1)
     else:
@@ -332,12 +341,12 @@ def _parse_structured_output(answer_raw: str, sources: List[SourceRef]) -> tuple
             json_str = json_match.group(0)
         else:
             return None, []
-    
+
     try:
         data = json.loads(json_str)
         answer_fi = data.get("answer_fi", [])
         sources_used = data.get("sources_used", [])
-        
+
         if isinstance(answer_fi, list):
             # Join bullets with newlines
             formatted = "\n".join(f"- {bullet}" if not bullet.startswith("-") else bullet for bullet in answer_fi)
@@ -347,7 +356,7 @@ def _parse_structured_output(answer_raw: str, sources: List[SourceRef]) -> tuple
             return answer_fi, sources_used
     except (json.JSONDecodeError, KeyError, AttributeError):
         pass
-    
+
     return None, []
 
 
@@ -356,23 +365,23 @@ def _remove_bracket_citations(answer: str, sources: List[SourceRef]) -> str:
     Remove bracket citations [S1] from answer - they're not valid.
     This prevents audit from flagging them as non-existent sources.
     """
-    
+
     # Find all bracket citations
-    bracket_citations = re.findall(r'\[S\d+\]', answer)
-    
+    bracket_citations = re.findall(r"\[S\d+\]", answer)
+
     if not bracket_citations:
         return answer
-    
+
     # Remove bracket citations (don't convert - just remove to avoid confusion)
     # This prevents audit from flagging them as non-existent sources
     result = answer
     for bracket_cite in bracket_citations:
-        result = result.replace(bracket_cite, '')
-    
+        result = result.replace(bracket_cite, "")
+
     # Clean up extra spaces
-    result = re.sub(r'\s+', ' ', result)
-    result = re.sub(r'\s+([.!?])', r'\1', result)
-    
+    result = re.sub(r"\s+", " ", result)
+    result = re.sub(r"\s+([.!?])", r"\1", result)
+
     return result.strip()
 
 
@@ -382,23 +391,23 @@ def _validate_citations(answer: str, sources: List[SourceRef], warnings: List[st
     Remove invalid citations.
     """
     available_labels = {s.label for s in sources}
-    
+
     # Find all citations
-    citations = re.findall(r'\(S\d+\)', answer)
-    cited_labels = {c.strip('()') for c in citations}
-    
+    citations = re.findall(r"\(S\d+\)", answer)
+    cited_labels = {c.strip("()") for c in citations}
+
     # Find invalid citations
     invalid_labels = cited_labels - available_labels
-    
+
     if invalid_labels:
         # Remove invalid citations
         for label in invalid_labels:
             answer = answer.replace(f"({label})", "")
         warnings.append(f"Removed citations to non-existent sources: {invalid_labels}")
         # Clean up extra spaces
-        answer = re.sub(r'\s+', ' ', answer)
-        answer = re.sub(r'\s+([.!?])', r'\1', answer)
-    
+        answer = re.sub(r"\s+", " ", answer)
+        answer = re.sub(r"\s+([.!?])", r"\1", answer)
+
     return answer.strip()
 
 
@@ -409,20 +418,22 @@ def _ensure_sources_section(answer: str, sources: List[SourceRef], sources_used:
     """
     answer_lower = answer.lower()
     has_sources_section = "lähteet:" in answer_lower or "sources:" in answer_lower
-    
+
     if not has_sources_section and sources:
         # Use sources_used if provided (from JSON), otherwise extract from answer
         if sources_used:
             cited_labels_clean = set(sources_used)
         else:
             # Extract which sources were cited - support both (S1) and [S1] formats for extraction
-            cited_with_parens = set(re.findall(r'\(S\d+\)', answer))
-            cited_with_brackets = set(re.findall(r'\[S\d+\]', answer))
-            cited_labels_clean = {label.strip('()') for label in cited_with_parens} | {label.strip('[]') for label in cited_with_brackets}
-        
+            cited_with_parens = set(re.findall(r"\(S\d+\)", answer))
+            cited_with_brackets = set(re.findall(r"\[S\d+\]", answer))
+            cited_labels_clean = {label.strip("()") for label in cited_with_parens} | {
+                label.strip("[]") for label in cited_with_brackets
+            }
+
         # Find sources that were actually cited
         cited_sources = [s for s in sources if s.label in cited_labels_clean]
-        
+
         if cited_sources:
             sources_lines = ["\nLähteet:"]
             for s in cited_sources:
@@ -436,7 +447,7 @@ def _ensure_sources_section(answer: str, sources: List[SourceRef], sources_used:
                 url = s.url or s.key or "N/A"
                 sources_lines.append(f"- [{s.label}] {s.title} — {url}")
             answer = answer.rstrip() + "\n" + "\n".join(sources_lines)
-    
+
     return answer
 
 
@@ -448,10 +459,10 @@ def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List
     # Skip if answer is already a refusal message
     if "En voi vastata" in answer or "cannot answer" in answer.lower():
         return answer
-    
+
     # Extract sentences more carefully (preserve punctuation)
-    sentence_parts = re.split(r'([.!?]+)\s+', answer)
-    
+    sentence_parts = re.split(r"([.!?]+)\s+", answer)
+
     # Recombine sentences with their punctuation
     sentences = []
     for i in range(0, len(sentence_parts) - 1, 2):
@@ -459,7 +470,7 @@ def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List
             sentences.append(sentence_parts[i] + sentence_parts[i + 1])
         else:
             sentences.append(sentence_parts[i])
-    
+
     # Find sentences with factual indicators but no citations
     factual_indicators = [
         "on",
@@ -479,7 +490,7 @@ def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List
         "syntyi",
         "kuoli",
     ]
-    
+
     uncited_sentences = []
     for i, sent in enumerate(sentences):
         sent_clean = sent.strip()
@@ -492,75 +503,79 @@ def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List
         # Check if sentence looks factual
         if any(ind in sent_lower for ind in factual_indicators):
             # Check if it has a citation
-            if not re.search(r'\[S\d+\]', sent_clean):
+            if not re.search(r"\[S\d+\]", sent_clean):
                 uncited_sentences.append((i, sent_clean))
-    
+
     # If too many uncited sentences, don't try to fix (would be unreliable)
     total_factual = len([s for s in sentences if any(ind in s.lower() for ind in factual_indicators)])
     if total_factual == 0:
         return answer  # No factual statements to cite
-    
+
     uncited_ratio = len(uncited_sentences) / max(total_factual, 1)
     if uncited_ratio > 0.5:  # More than 50% uncited - don't auto-fix
         return answer  # Return as-is, let the warning handle it
-    
+
     # For a few missing citations, try to add citations intelligently
     if uncited_sentences and sources:
         # Try to match uncited sentences to sources based on content similarity
         modified_sentences = sentences.copy()
         added_count = 0
-        
+
         for idx, sent in uncited_sentences[:5]:  # Limit to first 5 to avoid over-citing
             # Find best matching source based on keyword overlap
             best_source = None
             best_score = 0
-            
-            sent_words = set(re.findall(r'\w+', sent.lower()))
+
+            sent_words = set(re.findall(r"\w+", sent.lower()))
             for source in sources:
                 # Check title and URL for keywords
-                title_words = set(re.findall(r'\w+', (source.title or "").lower()))
+                title_words = set(re.findall(r"\w+", (source.title or "").lower()))
                 overlap = len(sent_words & title_words)
                 if overlap > best_score:
                     best_score = overlap
                     best_source = source
-            
+
             # Use best matching source, or first source as fallback
             source_label = (best_source or sources[0]).label
-            
+
             # Add citation at end of sentence (before punctuation) - use (S1) format
             if f"({source_label})" not in sent and f"[{source_label}]" not in sent:
                 # Find the sentence in the original list
                 original_sent = sentences[idx]
                 # Add citation before final punctuation - use (S1) format
-                sent_with_citation = re.sub(r'([.!?]+)\s*$', f' ({source_label})\\1', original_sent.rstrip())
+                sent_with_citation = re.sub(r"([.!?]+)\s*$", f" ({source_label})\\1", original_sent.rstrip())
                 if sent_with_citation != original_sent:
                     modified_sentences[idx] = sent_with_citation
                     added_count += 1
-        
+
         if added_count > 0:
-            result = ''.join(modified_sentences)
+            result = "".join(modified_sentences)
             # Only add warning if we added multiple citations
             if added_count > 1:
                 warnings.append(f"Automatically added {added_count} missing citations")
             return result
-    
+
     return answer
+
 
 # Log LLM provider configuration at startup
 logger.info(f"LLM Provider configured: {settings.llm_provider}")
 logger.info(f"vLLM Base URL: {settings.vllm_base_url}")
 logger.info(f"Ollama Base URL: {settings.ollama_base_url}")
 
+
 def _llm() -> LLM:
     """Initialize LLM based on provider setting."""
     # Ensure we're using the correct provider - force reload if needed
     # This helps catch cases where .env wasn't loaded properly
     provider = settings.llm_provider.lower().strip()
-    
+
     # Safety check: if provider is still "ollama" but we want vllm, log a warning
     if provider == "ollama":
-        logger.warning("LLM provider is set to 'ollama'. If you want to use vLLM, set LLM_PROVIDER=vllm in .env and restart the application.")
-    
+        logger.warning(
+            "LLM provider is set to 'ollama'. If you want to use vLLM, set LLM_PROVIDER=vllm in .env and restart the application."
+        )
+
     if provider == "ollama":
         return LLM(
             provider="ollama",
@@ -576,25 +591,30 @@ def _llm() -> LLM:
     elif provider == "mistral":
         if not settings.mistral_api_key:
             raise HTTPException(
-                status_code=500, 
-                detail="MISTRAL_API_KEY missing in environment/.env. Set LLM_PROVIDER=ollama to use free local models."
+                status_code=500,
+                detail="MISTRAL_API_KEY missing in environment/.env. Set LLM_PROVIDER=ollama to use free local models.",
             )
         return LLM(
             provider="mistral",
-            model=settings.ollama_model if settings.llm_provider == "ollama" else (settings.vllm_model if settings.llm_provider == "vllm" else settings.mistral_model),
+            model=(
+                settings.ollama_model
+                if settings.llm_provider == "ollama"
+                else (settings.vllm_model if settings.llm_provider == "vllm" else settings.mistral_model)
+            ),
             api_key=settings.mistral_api_key,
         )
     else:
         raise HTTPException(
             status_code=500,
-            detail=f"Unknown LLM provider: {provider} (from settings: {settings.llm_provider}). Use 'ollama', 'vllm', or 'mistral'"
+            detail=f"Unknown LLM provider: {provider} (from settings: {settings.llm_provider}). Use 'ollama', 'vllm', or 'mistral'",
         )
+
 
 @app.post("/ingest/rss", response_model=IngestResponse)
 def ingest_rss(req: IngestRequest):
     ingestor = RSSIngestor()
     result = ingestor.fetch_articles(req.feed_url, publisher=req.publisher, limit=req.limit)
-    
+
     # Convert Article objects to dict format for indexing
     articles_dict = [
         {
@@ -608,7 +628,7 @@ def ingest_rss(req: IngestRequest):
         for a in result.articles
     ]
     n = index_articles(qdrant, settings.qdrant_collection, embed_model, articles_dict)
-    
+
     # Save ingestion run to audit DB
     ingestion_run = IngestionRun(
         source_type=result.source_type,
@@ -618,24 +638,25 @@ def ingest_rss(req: IngestRequest):
         publisher=req.publisher,
     )
     save_ingestion_run(engine, ingestion_run)
-    
+
     return IngestResponse(indexed_chunks=n)
+
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, request: Request):
     start_time = time.time()
     request_id = getattr(request.state, "request_id", "unknown")
-    
+
     question = req.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="question empty")
-    
+
     logger.info("chat_request", extra={"request_id": request_id, "question": question[:100]})
 
     # Parse query intent and extract topic + geo
     query_intent = parse_query_intent(question)
     logger.info(f"Query intent: {query_intent.intent}, topic: {query_intent.topic}, geo: {query_intent.geo}")
-    
+
     # Adjust retrieval based on intent
     if query_intent.intent == "latest":
         # For "latest news", fetch more candidates to find newest
@@ -662,33 +683,29 @@ def chat(req: ChatRequest, request: Request):
         use_bm25=settings.use_bm25,
         rerank_model=rerank_model,
     )
-    
+
     logger.info(f"Stage 1: Fetched {len(candidates)} candidates")
-    
+
     # STAGE 2: Filter and rerank candidates by topic + geo relevance
     selected_hits = []
-    
+
     if query_intent.intent == "topic" and (query_intent.topic or query_intent.geo) and candidates:
         from .citations import compute_query_relevance
-        
+
         # Compute combined relevance (topic + geo)
         for h in candidates:
             payload = h.get("payload", {})
             text = payload.get("text", "")
             title = payload.get("title", "")
             vector_score = h.get("score")
-            
+
             # Compute topic relevance
             topic_relevance = 0.0
             if query_intent.topic:
                 topic_relevance = compute_query_relevance(
-                    query_intent.topic,
-                    text,
-                    title,
-                    embed_model=embed_model,
-                    vector_score=vector_score
+                    query_intent.topic, text, title, embed_model=embed_model, vector_score=vector_score
                 )
-            
+
             # Compute geo relevance (check if content mentions Finland)
             geo_relevance = 0.0
             if query_intent.geo == "FI":
@@ -697,7 +714,7 @@ def chat(req: ChatRequest, request: Request):
                 content_lower = (title + " " + text).lower()
                 matches = sum(1 for kw in finland_keywords if kw in content_lower)
                 geo_relevance = min(1.0, matches / 3.0)  # Normalize to 0-1
-            
+
             # Combine topic and geo relevance
             if query_intent.topic and query_intent.geo:
                 # Both filters: weighted combination
@@ -708,20 +725,22 @@ def chat(req: ChatRequest, request: Request):
                 combined_relevance = geo_relevance
             else:
                 combined_relevance = vector_score if vector_score else 0.5
-            
+
             h["combined_relevance"] = combined_relevance
             h["topic_relevance"] = topic_relevance
             h["geo_relevance"] = geo_relevance
-            
+
             # Keep if above threshold
             if combined_relevance >= settings.topic_relevance_threshold:
                 selected_hits.append(h)
-        
+
         # Sort by combined relevance
         selected_hits.sort(key=lambda x: x.get("combined_relevance", 0.0), reverse=True)
-        
-        logger.info(f"Stage 2: Selected {len(selected_hits)}/{len(candidates)} sources (topic: {query_intent.topic}, geo: {query_intent.geo})")
-        
+
+        logger.info(
+            f"Stage 2: Selected {len(selected_hits)}/{len(candidates)} sources (topic: {query_intent.topic}, geo: {query_intent.geo})"
+        )
+
         # Check if we have enough relevant sources
         if len(selected_hits) < settings.topic_min_sources:
             # Not enough relevant sources - ask for clarification
@@ -732,24 +751,23 @@ def chat(req: ChatRequest, request: Request):
                 # Use string methods instead of re to avoid scoping issues
                 words = [w for w in title.lower().split() if len(w) >= 4 and w.isalnum()]
                 all_keywords.extend([w for w in words if w not in STOPWORDS_FI and len(w) > 3])
-            
+
             # Get most common keywords
             keyword_counts = Counter(all_keywords)
             top_keywords = [kw for kw, _ in keyword_counts.most_common(3)]
-            
+
             # Generic topic suggestions
             generic_suggestions = ["Suomi", "maailma", "politiikka", "talous", "tiede", "urheilu"]
             suggestions = top_keywords[:2] + generic_suggestions[:2]
             suggestions = list(dict.fromkeys(suggestions))[:3]  # Remove duplicates, limit to 3
-            
+
             answer = (
                 f"En löytänyt tarpeeksi uutisia aiheesta '{query_intent.topic}' nykyisistä lähteistä. "
                 f"Löysin vain {len(selected_hits)} relevanttia lähdettä (tarvitaan vähintään {settings.topic_min_sources}).\n\n"
-                f"Voitko tarkentaa kysymystäsi? Esimerkiksi:\n"
-                + "\n".join(f"- {query_intent.topic} {s}" for s in suggestions)
+                f"Voitko tarkentaa kysymystäsi? Esimerkiksi:\n" + "\n".join(f"- {query_intent.topic} {s}" for s in suggestions)
             )
             warnings = [f"Insufficient relevant sources for topic '{query_intent.topic}'"]
-            
+
             # Determine model name
             if settings.llm_provider.lower() == "ollama":
                 model_name = settings.ollama_model
@@ -759,7 +777,7 @@ def chat(req: ChatRequest, request: Request):
                 model_name = settings.mistral_model
             else:
                 model_name = settings.vllm_model
-            
+
             run = ChatRun(
                 question=question,
                 answer=answer,
@@ -779,20 +797,20 @@ def chat(req: ChatRequest, request: Request):
                 run_id=saved.id,  # type: ignore
                 warnings=warnings,
             )
-        
+
         # Take top K selected sources
         selected_hits = selected_hits[:search_top_k]
         hits = selected_hits
     else:
         # No topic/geo filtering - use all candidates (but limit to search_top_k)
         hits = candidates[:search_top_k]
-    
+
     # If latest intent, sort by timestamp and take only the newest
     if query_intent.intent == "latest" and hits:
         hits = sort_sources_by_timestamp(hits, reverse=True)
         hits = hits[:1]  # Take only the newest one
         logger.info("Latest intent detected: returning only newest source")
-    
+
     # Validate that we only use sources that exist
     # This prevents citing non-existent sources
     if not hits:
@@ -801,26 +819,26 @@ def chat(req: ChatRequest, request: Request):
     # sanitize chunk texts for prompt
     for h in hits:
         p = h.get("payload", {})
-        p["text"] = sanitize_context(p.get("text",""))
+        p["text"] = sanitize_context(p.get("text", ""))
         h["payload"] = p
 
-    suspicious = any_context_is_suspicious([h.get("payload",{}).get("text","") for h in hits])
+    suspicious = any_context_is_suspicious([h.get("payload", {}).get("text", "") for h in hits])
 
     # Pass embed_model to hits for relevance computation
     if settings.use_relevance_gate:
         for h in hits:
             h["embed_model"] = embed_model
-    
+
     # Answerability gate with relevance checking
     can_answer, reason = check_answerability(
-        hits, 
+        hits,
         query=question,
         score_threshold=settings.score_threshold,
         relevance_threshold=settings.relevance_threshold,
         min_relevant_sources=settings.min_relevant_sources,
         use_relevance_gate=settings.use_relevance_gate,
     )
-    
+
     # Log relevance scores for debugging
     if settings.use_relevance_gate:
         for h in hits:
@@ -839,7 +857,7 @@ def chat(req: ChatRequest, request: Request):
                 stop_words = {"ja", "on", "oli", "tapahtui", "uutinen", "artikkeli", "the", "a", "an", "and", "or"}
                 topics = [w for w in words if len(w) > 3 and w not in stop_words][:2]
                 source_topics.extend(topics)
-        
+
         # Create clarifying questions
         if "relevant" in reason.lower() or "clarify" in reason.lower():
             clarifying = [
@@ -847,18 +865,19 @@ def chat(req: ChatRequest, request: Request):
                 "Haluatko tietää jotain tietystä tapahtumasta vai yleisestä aiheesta?",
             ]
             if source_topics:
-                clarifying.append(f"Löytyneet lähteet käsittelevät aiheita kuten: {', '.join(set(source_topics[:3]))}. Haluatko tietää näistä?")
+                clarifying.append(
+                    f"Löytyneet lähteet käsittelevät aiheita kuten: {', '.join(set(source_topics[:3]))}. Haluatko tietää näistä?"
+                )
         else:
             clarifying = [
                 "Tarvitsen lisää lähteitä vastatakseni tähän kysymykseen.",
                 "Voitko muotoilla kysymyksen toisin tai tarkentaa, mitä haluat tietää?",
             ]
-        
+
         answer = (
             f"En voi vastata luotettavasti nykyisten lähteiden perusteella.\n\n"
             f"{reason}\n\n"
-            f"Selventäviä kysymyksiä:\n"
-            + "\n".join(f"- {q}" for q in clarifying)
+            f"Selventäviä kysymyksiä:\n" + "\n".join(f"- {q}" for q in clarifying)
         )
         warnings = [reason]
         # Determine which model was actually used
@@ -870,7 +889,7 @@ def chat(req: ChatRequest, request: Request):
             model_name = settings.mistral_model
         else:
             model_name = settings.vllm_model  # Default fallback
-        
+
         run = ChatRun(
             question=question,
             answer=answer,
@@ -892,7 +911,7 @@ def chat(req: ChatRequest, request: Request):
         )
 
     hits_labeled, sources = assign_source_labels(hits)
-    
+
     # For latest intent, ensure we only have S1
     if query_intent.intent == "latest" and len(sources) > 1:
         # Keep only the first source (newest)
@@ -900,19 +919,19 @@ def chat(req: ChatRequest, request: Request):
         # Update hits_labeled to match
         hits_labeled = [h for h in hits_labeled if h.get("source_label") == "S1"]
         logger.info("Latest intent: limiting to single source S1")
-    
+
     prompt = build_cited_prompt(question, hits_labeled, sources)
 
     llm = _llm()
     warnings: List[str] = []
     sources_used: List[str] = []  # Track which sources were actually used
-    
+
     try:
         answer_raw = llm.generate(prompt, max_tokens=settings.max_answer_tokens)
-        
+
         # Try to parse JSON output
         answer, sources_used_json = _parse_structured_output(answer_raw, sources)
-        
+
         # If JSON parsing failed, fall back to plain text
         if not answer:
             answer = answer_raw
@@ -920,7 +939,7 @@ def chat(req: ChatRequest, request: Request):
             answer = _remove_repetitions(answer)
             # Remove prompt leakage
             answer = _remove_prompt_leakage(answer)
-            
+
             # If answer still contains instruction markers, re-generate with stricter prompt
             if _has_instruction_leakage(answer):
                 logger.warning("Detected instruction leakage, re-generating with stricter prompt")
@@ -933,8 +952,8 @@ def chat(req: ChatRequest, request: Request):
                     title = p.get("title") or ""
                     ctx_lines.append(f"{label} {title}: {chunk}")
                 ctx_str = "\n\n".join(ctx_lines)
-                
-                available_labels = ', '.join([s.label for s in sources])
+
+                available_labels = ", ".join([s.label for s in sources])
                 strict_prompt = f"""Vastaa kysymykseen suomeksi käyttäen vain annettua kontekstia.
 
 Kysymys: {question}
@@ -960,29 +979,29 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
                 warnings.append(f"Model cited non-existent sources: {invalid_sources}")
                 # Filter out invalid sources
                 sources_used = [s for s in sources_used if s in available_labels]
-        
+
         err = None
-        
+
         # Remove any bracket citations [S1] from answer - they're not valid
         answer = _remove_bracket_citations(answer, sources)
-        
+
         # Validate citations: ensure no non-existent sources are cited
         answer = _validate_citations(answer, sources, warnings)
-        
+
         # If JSON format was used, don't add Sources section (UI will show it)
         # Only add Sources section if answer is plain text format
         if not sources_used:
             # Plain text format - ensure Sources section exists
             answer = _ensure_sources_section(answer, sources, sources_used=None)
         # If sources_used exists, JSON format was used - don't add Sources section
-        
+
         # Citation coverage check with hard enforcement
         has_coverage, coverage_warnings = check_citation_coverage(answer, sources)
         if not has_coverage:
             # Check if answer has any citations at all - ONLY parentheses format (S1)
             # Ignore bracket format [S1] - it's not a valid citation
-            has_any_citations = bool(re.search(r'\(S\d+\)', answer))
-            
+            has_any_citations = bool(re.search(r"\(S\d+\)", answer))
+
             if not has_any_citations and len(sources) > 0:
                 # No citations at all - this is a critical failure
                 # Refuse to answer rather than show uncited content
@@ -996,7 +1015,7 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
                 # Try to add missing citations automatically FIRST
                 answer_before_fix = answer
                 answer = _add_missing_citations(answer, sources, warnings)
-                
+
                 # Re-check after auto-fix
                 if answer != answer_before_fix:
                     has_coverage_after, coverage_warnings_after = check_citation_coverage(answer, sources)
@@ -1006,7 +1025,7 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
                     else:
                         # Still has issues, but less severe
                         coverage_warnings = coverage_warnings_after
-                
+
                 warnings.extend(coverage_warnings)
     except Exception as e:
         answer = "Virhe LLM-kutsussa."
@@ -1014,7 +1033,7 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
         warnings.append(f"LLM error: {str(e)}")
 
     latency_ms = (time.time() - start_time) * 1000
-    
+
     # Determine which model was actually used
     if settings.llm_provider.lower() == "ollama":
         model_name = settings.ollama_model
@@ -1024,7 +1043,7 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
         model_name = settings.mistral_model
     else:
         model_name = settings.vllm_model  # Default fallback
-    
+
     run = ChatRun(
         question=question,
         answer=answer,
@@ -1049,44 +1068,53 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
     if sources_used:
         # Only include sources that were cited in the answer
         selected_sources = [s for s in sources if s.label in sources_used]
-        logger.info(f"Returning {len(selected_sources)} selected sources (from {len(sources)} total, {len(sources_used)} cited)")
+        logger.info(
+            f"Returning {len(selected_sources)} selected sources (from {len(sources)} total, {len(sources_used)} cited)"
+        )
     else:
         # Plain text format - return all sources passed to LLM
         selected_sources = sources
-    
+
     # Only include hits that correspond to selected sources
     selected_source_labels = {s.label for s in selected_sources}
     selected_hits_labeled = [h for h in hits_labeled if h.get("source_label") in selected_source_labels]
-    
+
     hit_rows = []
     hit_items = []
     for h in selected_hits_labeled:
         p = h.get("payload", {})
-        hit_rows.append(RetrievalHit(
-            uid=p.get("uid"),
-            source_label=h.get("source_label"),
-            source_id=p.get("source_id") or p.get("source"),
-            title=p.get("title"),
-            url=p.get("url"),
-            published_at=p.get("published_at"),
-            score=h.get("score"),
-            rerank_score=h.get("rerank_score"),
-            text_snippet=(p.get("text") or "")[:240],
-        ))
-        hit_items.append(HitItem(
-            uid=p.get("uid"),
-            source_label=h.get("source_label"),
-            title=p.get("title"),
-            url=p.get("url"),
-            published_at=p.get("published_at"),
-            score=h.get("score"),
-            rerank_score=h.get("rerank_score"),
-            text=p.get("text"),
-        ))
+        hit_rows.append(
+            RetrievalHit(
+                uid=p.get("uid"),
+                source_label=h.get("source_label"),
+                source_id=p.get("source_id") or p.get("source"),
+                title=p.get("title"),
+                url=p.get("url"),
+                published_at=p.get("published_at"),
+                score=h.get("score"),
+                rerank_score=h.get("rerank_score"),
+                text_snippet=(p.get("text") or "")[:240],
+            )
+        )
+        hit_items.append(
+            HitItem(
+                uid=p.get("uid"),
+                source_label=h.get("source_label"),
+                title=p.get("title"),
+                url=p.get("url"),
+                published_at=p.get("published_at"),
+                score=h.get("score"),
+                rerank_score=h.get("rerank_score"),
+                text=p.get("text"),
+            )
+        )
 
     saved = save_run(engine, run, hit_rows)
 
-    src_items = [SourceItem(label=s.label, title=s.title, url=s.url, published_at=s.published_at, publisher=s.publisher) for s in selected_sources]
+    src_items = [
+        SourceItem(label=s.label, title=s.title, url=s.url, published_at=s.published_at, publisher=s.publisher)
+        for s in selected_sources
+    ]
 
     if suspicious:
         warnings.append("Suspicious content detected in retrieved sources")
@@ -1099,10 +1127,16 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
         warnings=warnings,
     )
 
+
 @app.get("/runs", response_model=list[RunItem])
 def runs(limit: int = 20):
     rs = list_runs(engine, limit=limit)
-    return [RunItem(id=r.id, created_at=r.created_at.isoformat(), question=r.question, model=r.model) for r in rs if r.id is not None]
+    return [
+        RunItem(id=r.id, created_at=r.created_at.isoformat(), question=r.question, model=r.model)
+        for r in rs
+        if r.id is not None
+    ]
+
 
 @app.get("/runs/{run_id}")
 def run_detail(run_id: int):
@@ -1111,10 +1145,12 @@ def run_detail(run_id: int):
         raise HTTPException(status_code=404, detail="not found")
     return r
 
+
 @app.get("/health")
 def health():
     """Health check endpoint."""
     return {"status": "healthy", "service": "transparent-news-assistant"}
+
 
 @app.get("/ready")
 def ready():
@@ -1130,15 +1166,16 @@ def ready():
         logger.error("readiness_check_failed", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail=f"Not ready: {str(e)}")
 
+
 @app.delete("/articles", response_model=DeleteArticleResponse)
 def delete_article(req: DeleteArticleRequest):
     """Delete all chunks for an article by URL or article_id."""
     if not req.url and not req.article_id:
         raise HTTPException(status_code=400, detail="Either url or article_id required")
-    
+
     if req.url:
         n = delete_article_by_url(qdrant, settings.qdrant_collection, req.url)
     else:
         n = delete_article_by_id(qdrant, settings.qdrant_collection, req.article_id)  # type: ignore
-    
+
     return DeleteArticleResponse(deleted_chunks=n)

@@ -5,6 +5,7 @@ import requests
 # Optional import for Mistral (only needed if using mistral provider)
 try:
     from mistralai import Mistral
+
     MISTRAL_AVAILABLE = True
 except ImportError:
     MISTRAL_AVAILABLE = False
@@ -14,7 +15,7 @@ class LLM:
     def __init__(self, provider: str, model: str, api_key: Optional[str] = None, base_url: Optional[str] = None):
         """
         Initialize LLM client.
-        
+
         Args:
             provider: "ollama", "vllm", or "mistral"
             model: Model name (e.g., "phi:latest" for Ollama, "microsoft/Phi-3-mini-4k-instruct" for vLLM)
@@ -23,7 +24,7 @@ class LLM:
         """
         self.provider = provider
         self.model = model
-        
+
         if provider == "ollama":
             self.base_url = base_url or "http://localhost:11434"
             self.api_key = None
@@ -51,15 +52,15 @@ class LLM:
             return self._generate_mistral(prompt, max_tokens)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
-    
+
     def _generate_ollama(self, prompt: str, max_tokens: int) -> str:
         """Generate using Ollama API (free, local)."""
         url = f"{self.base_url}/api/generate"
-        
+
         # Ollama models may have tags (e.g., "phi:latest")
         # Use the model name as-is (should include tag if needed)
         model_name = self.model
-        
+
         payload = {
             "model": model_name,
             "prompt": prompt,
@@ -69,9 +70,9 @@ class LLM:
                 "temperature": 0.3,  # Slightly higher to reduce repetition
                 "num_ctx": 2048,  # Reduced context window for faster processing
                 "repeat_penalty": 1.2,  # Penalize repetition (1.0 = no penalty, higher = more penalty)
-            }
+            },
         }
-        
+
         try:
             # Use a session with connection pooling, retries, and keep-alive
             session = requests.Session()
@@ -85,14 +86,14 @@ class LLM:
                 pool_connections=1,
                 pool_maxsize=1,
             )
-            session.mount('http://', adapter)
-            
+            session.mount("http://", adapter)
+
             # Add keep-alive headers
             headers = {
-                'Connection': 'keep-alive',
-                'Content-Type': 'application/json',
+                "Connection": "keep-alive",
+                "Content-Type": "application/json",
             }
-            
+
             # Increased timeout for slow models (Ollama can take time, especially on CPU)
             # Connect timeout: 10s, Read timeout: 180s (3 minutes)
             response = session.post(url, json=payload, headers=headers, timeout=(10, 180))
@@ -109,23 +110,21 @@ class LLM:
             raise RuntimeError(f"Ollama API error: {e}")
         except Exception as e:
             raise RuntimeError(f"Unexpected error calling Ollama: {type(e).__name__}: {str(e)[:200]}")
-    
+
     def _generate_vllm(self, prompt: str, max_tokens: int) -> str:
         """Generate using vLLM (OpenAI-compatible API, much faster than Ollama)."""
         # vLLM uses OpenAI-compatible chat completions API
         url = f"{self.base_url}/v1/chat/completions"
         payload = {
             "model": self.model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "temperature": 0.3,  # Slightly higher to reduce repetition
             "frequency_penalty": 0.5,  # Penalize frequent tokens to reduce repetition
             "presence_penalty": 0.3,  # Penalize already present tokens
             "stop": ["\n\n\n", "KYSYMYS:", "KONTEKSTI:", "VASTAUSOHJE:"],  # Stop on obvious repetition patterns
         }
-        
+
         try:
             # First, test if the server is reachable by checking /v1/models
             try:
@@ -140,7 +139,7 @@ class LLM:
                 # If /v1/models fails, try the chat endpoint anyway
                 # (in case there's a network issue that might resolve)
                 pass
-            
+
             session = requests.Session()
             adapter = requests.adapters.HTTPAdapter(
                 max_retries=requests.adapters.Retry(
@@ -152,18 +151,18 @@ class LLM:
                 pool_connections=1,
                 pool_maxsize=1,
             )
-            session.mount('http://', adapter)
-            
+            session.mount("http://", adapter)
+
             headers = {
-                'Connection': 'keep-alive',
-                'Content-Type': 'application/json',
+                "Connection": "keep-alive",
+                "Content-Type": "application/json",
             }
-            
+
             # vLLM is much faster, shorter timeout is fine
             response = session.post(url, json=payload, headers=headers, timeout=(10, 60))
             response.raise_for_status()
             result = response.json()
-            
+
             # OpenAI-compatible response format
             return result["choices"][0]["message"]["content"].strip()
         except requests.exceptions.ConnectionError as e:
@@ -189,7 +188,7 @@ class LLM:
             raise RuntimeError(f"vLLM API error: {e}")
         except Exception as e:
             raise RuntimeError(f"Unexpected error calling vLLM: {type(e).__name__}: {str(e)[:200]}")
-    
+
     def _generate_mistral(self, prompt: str, max_tokens: int) -> str:
         """Generate using Mistral API (requires API key)."""
         # Mistral chat API expects messages

@@ -6,10 +6,11 @@ from sqlalchemy import JSON as SQLJSON
 
 # Removed joinedload import - relationships are handled manually for compatibility
 
+
 class ChatRun(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    
+
     # User context (optional, for multi-user scenarios)
     user_id: str | None = None
 
@@ -19,32 +20,33 @@ class ChatRun(SQLModel, table=True):
     model: str
     embed_model: str
     rerank_model: str | None = None
-    
+
     # Prompt version for tracking prompt changes
     prompt_version: str = "v1"
 
     top_k: int
     mmr_k: int
     score_threshold: float
-    
+
     # Store retrieval params as JSON for flexibility
     retrieval_params: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(SQLJSON))
 
     suspicious_context: bool = False
     error: str | None = None
-    
+
     # Warnings as JSON array
     warnings: List[str] = Field(default_factory=list, sa_column=Column(SQLJSON))
-    
+
     # Latency in milliseconds
     latency_ms: float | None = None
 
     # Relationship will be defined after both classes are declared
 
+
 class RetrievalHit(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     run_id: int = Field(foreign_key="chatrun.id", index=True)
-    
+
     rank: int | None = None  # Rank in retrieval results (1-based)
 
     uid: str | None = None
@@ -63,18 +65,20 @@ class RetrievalHit(SQLModel, table=True):
 
 class IngestionRun(SQLModel, table=True):
     """Track ingestion runs for audit trail."""
+
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    
+
     source_type: str  # "rss", "yle", etc.
     source_ref: str  # Feed URL, API endpoint, etc.
-    
+
     count_ingested: int = 0
     errors: List[str] = Field(default_factory=list, sa_column=Column(SQLJSON))
-    
+
     # Optional metadata
     publisher: str | None = None
     user_id: str | None = None
+
 
 # Define relationships after both classes are declared to avoid forward reference issues
 # This pattern avoids SQLAlchemy's generic type annotation parsing issues
@@ -82,11 +86,14 @@ class IngestionRun(SQLModel, table=True):
 ChatRun.hits: List["RetrievalHit"] = Relationship(back_populates="run")  # type: ignore
 RetrievalHit.run: "ChatRun" = Relationship(back_populates="hits")  # type: ignore
 
+
 def get_engine(db_url: str):
     return create_engine(db_url, echo=False)
 
+
 def init_db(engine):
     SQLModel.metadata.create_all(engine)
+
 
 def save_run(engine, run: ChatRun, hits: list[RetrievalHit]) -> ChatRun:
     with Session(engine) as s:
@@ -112,6 +119,7 @@ def save_ingestion_run(engine, run: IngestionRun) -> IngestionRun:
         s.refresh(run)
         return run
 
+
 def list_runs(engine, limit: int = 20) -> list[ChatRun]:
     with Session(engine) as s:
         # Query runs without eager loading hits (relationship might not be accessible)
@@ -121,6 +129,7 @@ def list_runs(engine, limit: int = 20) -> list[ChatRun]:
         for run in runs:
             s.expunge(run)
         return runs
+
 
 def read_run(engine, run_id: int) -> ChatRun | None:
     with Session(engine) as s:
@@ -132,7 +141,7 @@ def read_run(engine, run_id: int) -> ChatRun | None:
             hits_stmt = select(RetrievalHit).where(RetrievalHit.run_id == run_id).order_by(RetrievalHit.rank)
             hits = list(s.exec(hits_stmt).all())
             # Attach hits to run manually (for backward compatibility)
-            if hasattr(run, 'hits'):
+            if hasattr(run, "hits"):
                 run.hits = hits  # type: ignore
             # Expunge to detach from session
             s.expunge(run)

@@ -4,6 +4,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 
+
 def _clean_html(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     # remove scripts/styles
@@ -11,6 +12,7 @@ def _clean_html(html: str) -> str:
         t.decompose()
     text = soup.get_text(" ", strip=True)
     return text
+
 
 def fetch_rss(feed_url: str, publisher: str | None = None, limit: int = 30) -> List[Dict]:
     d = feedparser.parse(feed_url)
@@ -40,12 +42,14 @@ def fetch_rss(feed_url: str, publisher: str | None = None, limit: int = 30) -> L
             except Exception:
                 pass
         text = _clean_html(text) if "<" in text else text
-        out.append({
-            "id": url or title,
-            "url": url,
-            "title": title,
-            "text": text.strip(),
-            "published_at": published_at,
-            "publisher": publisher,
-        })
+        out.append(
+            {
+                "id": url or title,
+                "url": url,
+                "title": title,
+                "text": text.strip(),
+                "published_at": published_at,
+                "publisher": publisher,
+            }
+        )
     return [a for a in out if a.get("text")]

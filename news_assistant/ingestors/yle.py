@@ -1,4 +1,5 @@
 """Yle API ingestor (scaffold with mock mode)."""
+
 from __future__ import annotations
 import logging
 import os
@@ -15,18 +16,18 @@ YLE_API_BASE = "https://external.api.yle.fi/v1"
 
 class YleIngestor(Ingestor):
     """Yle API ingestor with mock mode for development."""
-    
+
     def __init__(self, api_key: Optional[str] = None):
         """
         Initialize Yle ingestor.
-        
+
         Args:
             api_key: Yle API key. If None, will try YLE_API_KEY env var.
                      If still None, runs in mock mode.
         """
         self.api_key = api_key or os.getenv("YLE_API_KEY")
         self.mock_mode = self.api_key is None
-    
+
     def fetch_articles(
         self,
         source_ref: str,
@@ -35,18 +36,18 @@ class YleIngestor(Ingestor):
     ) -> IngestResult:
         """
         Fetch articles from Yle API.
-        
+
         Args:
             source_ref: API endpoint path (e.g., "/articles/list") or query params
             publisher: Publisher name (default: "Yle")
             limit: Maximum articles to fetch
-            
+
         Returns:
             IngestResult with articles and metadata
         """
         errors: List[str] = []
         articles: List[Article] = []
-        
+
         if self.mock_mode:
             logger.warning("YleIngestor running in mock mode (no API key). Returning sample data.")
             # Return mock articles for development
@@ -78,7 +79,7 @@ class YleIngestor(Ingestor):
                 source_type="yle",
                 source_ref=source_ref,
             )
-        
+
         # Real API implementation
         try:
             # Construct API URL
@@ -90,11 +91,11 @@ class YleIngestor(Ingestor):
             else:
                 api_url += "&"
             api_url += f"app_id={self.api_key}&limit={limit}"
-            
+
             response = requests.get(api_url, timeout=10)
             response.raise_for_status()
             data = response.json()
-            
+
             # Parse Yle API response (structure depends on endpoint)
             # This is a scaffold - adjust based on actual Yle API response format
             if "data" in data:
@@ -113,7 +114,7 @@ class YleIngestor(Ingestor):
                             articles.append(article)
                     except Exception as e:
                         errors.append(f"Error parsing article: {str(e)}")
-            
+
         except requests.exceptions.RequestException as e:
             error_msg = f"Yle API request failed: {str(e)}"
             errors.append(error_msg)
@@ -122,7 +123,7 @@ class YleIngestor(Ingestor):
             error_msg = f"Error processing Yle API response: {str(e)}"
             errors.append(error_msg)
             logger.error(error_msg, exc_info=True)
-        
+
         return IngestResult(
             articles=articles,
             count_ingested=len(articles),
