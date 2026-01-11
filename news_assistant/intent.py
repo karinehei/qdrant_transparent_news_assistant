@@ -1,6 +1,6 @@
 """Intent detection and topic extraction for user queries."""
 import re
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -143,8 +143,6 @@ def parse_query_intent(query: str) -> QueryIntent:
     Returns:
         QueryIntent with intent type, extracted topic, and geo filter
     """
-    query_lower = query.lower().strip()
-    
     # Check for latest intent
     is_latest, is_headlines = detect_intent(query)
     

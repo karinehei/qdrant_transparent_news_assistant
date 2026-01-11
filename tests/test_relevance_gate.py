@@ -1,5 +1,4 @@
 """Test relevance gate and citation enforcement."""
-import pytest
 from news_assistant.citations import (
     check_answerability,
     check_citation_coverage,

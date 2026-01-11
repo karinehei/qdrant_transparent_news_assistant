@@ -1,8 +1,8 @@
 from __future__ import annotations
-import time
 import logging
 import re
 import json
+import time
 from collections import Counter
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request
@@ -11,6 +11,18 @@ from sentence_transformers import SentenceTransformer, CrossEncoder
 
 from .settings import settings
 from .middleware import setup_cors, RequestLoggingMiddleware, RateLimitMiddleware
+from .ingestors import RSSIngestor
+from .qdrant_store import ensure_collection, index_articles, delete_article_by_url, delete_article_by_id
+from .retrieval import hybrid_search
+from .citations import assign_source_labels, build_cited_prompt, check_answerability, check_citation_coverage, SourceRef
+from .intent import sort_sources_by_timestamp, parse_query_intent, STOPWORDS_FI
+from .safety import sanitize_context, any_context_is_suspicious
+from .llm import LLM
+from .audit_db import (
+    get_engine, init_db, ChatRun, RetrievalHit, IngestionRun,
+    save_run, save_ingestion_run, list_runs, read_run
+)
+from .schemas import IngestRequest, IngestResponse, ChatRequest, ChatResponse, SourceItem, HitItem, RunItem, DeleteArticleRequest, DeleteArticleResponse
 
 # Configure structured logging
 logging.basicConfig(
@@ -19,18 +31,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-from .ingestors import RSSIngestor, Article
-from .qdrant_store import ensure_collection, index_articles, delete_article_by_url, delete_article_by_id
-from .retrieval import hybrid_search
-from .citations import assign_source_labels, build_cited_prompt, check_answerability, check_citation_coverage, SourceRef
-from .intent import detect_intent, sort_sources_by_timestamp, parse_query_intent, QueryIntent, STOPWORDS_FI
-from .safety import sanitize_context, any_context_is_suspicious
-from .llm import LLM
-from .audit_db import (
-    get_engine, init_db, ChatRun, RetrievalHit, IngestionRun,
-    save_run, save_ingestion_run, list_runs, read_run
-)
-from .schemas import IngestRequest, IngestResponse, ChatRequest, ChatResponse, SourceItem, HitItem, RunItem, DeleteArticleRequest, DeleteArticleResponse
 
 app = FastAPI(title="Transparent News Assistant", version="0.1.0")
 
@@ -309,8 +309,6 @@ def _validate_citations(answer: str, sources: List[SourceRef], warnings: List[st
     Validate that all citations in answer reference existing sources.
     Remove invalid citations.
     """
-    import re
-    
     available_labels = {s.label for s in sources}
     
     # Find all citations
@@ -337,8 +335,6 @@ def _ensure_sources_section(answer: str, sources: List[SourceRef], sources_used:
     Ensure the answer always includes a Sources section.
     If missing, append it with all sources that have citations in the answer.
     """
-    import re
-    
     answer_lower = answer.lower()
     has_sources_section = "lähteet:" in answer_lower or "sources:" in answer_lower
     
@@ -377,8 +373,6 @@ def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List
     Attempt to automatically add citations to uncited factual statements.
     This is a best-effort approach - if too many citations are missing, we should refuse.
     """
-    import re
-    
     # Skip if answer is already a refusal message
     if "En voi vastata" in answer or "cannot answer" in answer.lower():
         return answer
@@ -479,7 +473,7 @@ def _llm() -> LLM:
     
     # Safety check: if provider is still "ollama" but we want vllm, log a warning
     if provider == "ollama":
-        logger.warning(f"LLM provider is set to 'ollama'. If you want to use vLLM, set LLM_PROVIDER=vllm in .env and restart the application.")
+        logger.warning("LLM provider is set to 'ollama'. If you want to use vLLM, set LLM_PROVIDER=vllm in .env and restart the application.")
     
     if provider == "ollama":
         return LLM(
@@ -512,9 +506,6 @@ def _llm() -> LLM:
 
 @app.post("/ingest/rss", response_model=IngestResponse)
 def ingest_rss(req: IngestRequest):
-    import time
-    start_time = time.time()
-    
     ingestor = RSSIngestor()
     result = ingestor.fetch_articles(req.feed_url, publisher=req.publisher, limit=req.limit)
     
@@ -546,8 +537,6 @@ def ingest_rss(req: IngestRequest):
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, request: Request):
-    import time
-    import re  # Ensure re is available in function scope
     start_time = time.time()
     request_id = getattr(request.state, "request_id", "unknown")
     
@@ -669,7 +658,7 @@ def chat(req: ChatRequest, request: Request):
             
             answer = (
                 f"En löytänyt tarpeeksi uutisia aiheesta '{query_intent.topic}' nykyisistä lähteistä. "
-                f"Löysin vain {len(relevant_hits)} relevanttia lähdettä (tarvitaan vähintään {settings.topic_min_sources}).\n\n"
+                f"Löysin vain {len(selected_hits)} relevanttia lähdettä (tarvitaan vähintään {settings.topic_min_sources}).\n\n"
                 f"Voitko tarkentaa kysymystäsi? Esimerkiksi:\n"
                 + "\n".join(f"- {query_intent.topic} {s}" for s in suggestions)
             )
@@ -716,7 +705,7 @@ def chat(req: ChatRequest, request: Request):
     if query_intent.intent == "latest" and hits:
         hits = sort_sources_by_timestamp(hits, reverse=True)
         hits = hits[:1]  # Take only the newest one
-        logger.info(f"Latest intent detected: returning only newest source")
+        logger.info("Latest intent detected: returning only newest source")
     
     # Validate that we only use sources that exist
     # This prevents citing non-existent sources
@@ -824,7 +813,7 @@ def chat(req: ChatRequest, request: Request):
         sources = sources[:1]
         # Update hits_labeled to match
         hits_labeled = [h for h in hits_labeled if h.get("source_label") == "S1"]
-        logger.info(f"Latest intent: limiting to single source S1")
+        logger.info("Latest intent: limiting to single source S1")
     
     prompt = build_cited_prompt(question, hits_labeled, sources)
 
@@ -906,16 +895,15 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
         if not has_coverage:
             # Check if answer has any citations at all - ONLY parentheses format (S1)
             # Ignore bracket format [S1] - it's not a valid citation
-            import re
             has_any_citations = bool(re.search(r'\(S\d+\)', answer))
             
             if not has_any_citations and len(sources) > 0:
                 # No citations at all - this is a critical failure
                 # Refuse to answer rather than show uncited content
                 answer = (
-                    f"En voi vastata luotettavasti, koska vastaus ei sisältänyt lähdeviitteitä. "
-                    f"Tarvitsen vastauksen, jossa jokainen faktaväite viittaa lähteeseen [S1], [S2], jne. "
-                    f"Pyydä uudelleen tai tarkenna kysymystäsi."
+                    "En voi vastata luotettavasti, koska vastaus ei sisältänyt lähdeviitteitä. "
+                    "Tarvitsen vastauksen, jossa jokainen faktaväite viittaa lähteeseen [S1], [S2], jne. "
+                    "Pyydä uudelleen tai tarkenna kysymystäsi."
                 )
                 warnings.append("Answer generated without citations - refused to display")
             else:

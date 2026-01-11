@@ -1,6 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict, Optional
-from datetime import datetime
+from typing import List, Dict
 import feedparser
 import requests
 from bs4 import BeautifulSoup

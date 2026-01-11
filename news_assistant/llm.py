@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Optional
 import requests
-import json
 
 # Optional import for Mistral (only needed if using mistral provider)
 try:

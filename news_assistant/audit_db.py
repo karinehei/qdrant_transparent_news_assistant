@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, select, JSON, Column
+from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, select, Column
 from sqlalchemy import JSON as SQLJSON
 # Removed joinedload import - relationships are handled manually for compatibility
 

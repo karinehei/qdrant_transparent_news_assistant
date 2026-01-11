@@ -1,8 +1,7 @@
 """Test intent detection, citation format, and prompt leakage fixes."""
-import pytest
 from news_assistant.intent import detect_intent, sort_sources_by_timestamp
 from news_assistant.citations import check_citation_coverage, SourceRef
-from news_assistant.api import _remove_prompt_leakage, _validate_url
+from news_assistant.api import _remove_prompt_leakage
 
 
 def test_latest_intent_detection():
@@ -83,16 +82,6 @@ def test_prompt_leakage_removal():
     normal_answer = "Tämä on normaali vastaus ilman ohjeita."
     cleaned_normal = _remove_prompt_leakage(normal_answer)
     assert cleaned_normal == normal_answer
-
-
-def test_url_validation():
-    """Test URL validation."""
-    assert _validate_url("https://example.com") is True
-    assert _validate_url("http://example.com") is True
-    assert _validate_url("https://") is True  # Technically valid start
-    assert _validate_url("example.com") is False
-    assert _validate_url("") is False
-    assert _validate_url("ftp://example.com") is False
 
 
 def test_audit_ignores_procedural_sentences():

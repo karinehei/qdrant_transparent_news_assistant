@@ -137,15 +137,6 @@ class RSSIngestor(Ingestor):
                         errors.append(f"Empty content for {url}")
                         continue
                     
-                    # Extract tags/section if available
-                    tags = None
-                    if hasattr(entry, "tags") and entry.tags:
-                        tags = [tag.term for tag in entry.tags if hasattr(tag, "term")]
-                    
-                    section = None
-                    if hasattr(entry, "category"):
-                        section = entry.category
-                    
                     article = Article(
                         url=url,
                         title=title,

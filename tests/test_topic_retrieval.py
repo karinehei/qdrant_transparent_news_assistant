@@ -1,6 +1,5 @@
 """Test topic-based retrieval and filtering."""
-import pytest
-from news_assistant.intent import parse_query_intent, extract_topic, QueryIntent
+from news_assistant.intent import parse_query_intent, extract_topic
 from news_assistant.citations import compute_query_relevance, check_citation_coverage, SourceRef
 from news_assistant.api import _validate_citations, _parse_structured_output
 

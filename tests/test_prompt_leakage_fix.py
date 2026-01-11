@@ -1,5 +1,4 @@
 """Test prompt leakage fixes and citation validation."""
-import pytest
 from news_assistant.api import _remove_prompt_leakage, _has_instruction_leakage, _remove_bracket_citations
 from news_assistant.citations import check_citation_coverage, SourceRef
 
