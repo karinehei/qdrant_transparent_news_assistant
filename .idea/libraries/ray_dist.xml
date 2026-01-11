@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="ray_dist">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/.venv/lib/python3.12/site-packages/ray/jars/ray_dist.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
