@@ -46,14 +46,24 @@ setup_cors(app)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
-# Lazy singletons
+# Lazy singletons - initialized on startup
 qdrant = QdrantClient(url=settings.qdrant_url)
 embed_model = SentenceTransformer(settings.embed_model)
 rerank_model = CrossEncoder(settings.rerank_model) if settings.use_rerank else None
-ensure_collection(qdrant, settings.qdrant_collection, dim=embed_model.get_sentence_embedding_dimension())
 
 engine = get_engine(settings.audit_db_url)
 init_db(engine)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize Qdrant collection on application startup."""
+    try:
+        ensure_collection(
+            qdrant, settings.qdrant_collection, dim=embed_model.get_sentence_embedding_dimension()
+        )
+    except Exception as e:
+        logger.warning(f"Could not initialize Qdrant collection (may not be available): {e}")
 
 def _remove_repetitions(text: str) -> str:
     """
