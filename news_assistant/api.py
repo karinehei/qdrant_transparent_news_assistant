@@ -259,16 +259,14 @@ def _remove_prompt_leakage(answer: str) -> str:
         matches_marker = any(re.search(marker, line_stripped, re.IGNORECASE) for marker in instruction_markers)
         
         # Check if line is a numbered instruction (e.g., "1. VASTAUS VAIN KONTEKSTISTA")
-        matches_numbered = re.match(r'^\d+\.\s+(VASTAUS|PAKOLLISET|KRIITTISET|KUNTAAN)', line_upper)
-        
-        # Also check for numbered patterns in the instruction_markers
-        matches_numbered_pattern = any(
-            re.search(r'^\d+\.\s+', line_stripped) and kw in line_upper
-            for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET"]
+        # Match lines starting with number followed by instruction keywords
+        matches_numbered = bool(
+            re.match(r'^\d+\.\s+', line_stripped)
+            and any(kw in line_upper for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN"])
         )
         
         # Skip purely instructional lines
-        if not has_keyword and not matches_marker and not matches_numbered and not matches_numbered_pattern:
+        if not has_keyword and not matches_marker and not matches_numbered:
             cleaned_lines.append(line)
     
     result = '\n'.join(cleaned_lines).strip()
