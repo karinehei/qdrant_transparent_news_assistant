@@ -138,7 +138,7 @@ def compute_query_relevance(
         # If any tokens match, ensure minimum relevance based on match ratio
         match_ratio = overlap / len(query_tokens)
         base_relevance = max(base_relevance, 0.2 + (match_ratio * 0.3))  # 0.2 to 0.5 range
-    
+
     token_relevance = min(1.0, base_relevance)  # Cap at 1.0
     
     # If we have vector score, combine it with token relevance

@@ -19,10 +19,12 @@ def looks_like_prompt_injection(text: str) -> bool:
             return True
     return False
 
+
 def sanitize_context(text: str) -> str:
     # Keep it simple: strip excessive whitespace and truncate very long chunks
     t = re.sub(r"\s+", " ", text).strip()
     return t[:1500]
+
 
 def any_context_is_suspicious(texts: Iterable[str]) -> bool:
     return any(looks_like_prompt_injection(t) for t in texts)

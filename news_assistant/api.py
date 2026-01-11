@@ -234,7 +234,7 @@ def _remove_prompt_leakage(answer: str) -> str:
         (r"\bVastaa\s+suomeksi\s*", ""),
         (r"^\d+\.\s+VASTAUS\s+VAIN\s+KONTEKSTISTA\s*", ""),  # Remove numbered instruction lines
         (r"^\d+\.\s+PAKOLLISET\s+LÄHTEET\s*", ""),
-    ]
+    ],
     
     for phrase_pattern, replacement in instruction_phrases_to_remove:
         result = re.sub(phrase_pattern, replacement, result, flags=re.IGNORECASE | re.MULTILINE)
