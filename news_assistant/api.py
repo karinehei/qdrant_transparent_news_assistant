@@ -256,23 +256,52 @@ def _remove_prompt_leakage(answer: str) -> str:
         else:
             matches_numbered = False
 
-        # Skip purely instructional lines
-        if not has_keyword and not matches_marker and not matches_numbered:
+        # Check if line looks like it's ONLY instructions (no actual content)
+        # Numbered lines that are pure instructions should be removed
+        if is_numbered_line and matches_numbered:
+            # Numbered instruction lines (e.g., "1. VASTAUS VAIN KONTEKSTISTA") should be removed
+            # But if the line also has actual content after the instruction, keep it
+            # Check if there's substantial content after the numbered instruction part
+            content_after_number = re.sub(r"^\d+\.\s+", "", line_stripped, count=1)
+            # Remove instruction keywords to see if there's real content left
+            content_without_keywords = content_after_number
+            for kw in ["VASTAUS", "VAIN", "KONTEKSTISTA", "PAKOLLISET", "LÄHTEET", "KRIITTISET", "KUNTAAN"]:
+                content_without_keywords = re.sub(rf"\b{kw}\b", "", content_without_keywords, flags=re.IGNORECASE)
+            content_without_keywords = content_without_keywords.strip()
+            
+            has_substantial_content = (
+                len(content_without_keywords) > 15  # At least 15 chars of non-keyword content
+                or re.search(r"[.!?]\s+[A-ZÄÖÅ]", content_after_number)  # Has sentence structure
+                or re.search(r"\(S\d+\)|vastaus|answer|tämä", content_after_number, re.IGNORECASE)  # Has answer keywords
+            )
+            if not has_substantial_content:
+                continue  # Skip this numbered instruction line
+        
+        # For non-numbered lines, check if they're pure instructions
+        looks_like_only_instructions = (
+            (has_keyword or matches_marker)
+            and len(line_stripped) < 100  # Short lines are likely just instructions
+            and not re.search(r"[.!?]\s+[A-ZÄÖÅ]", line_stripped)  # No sentence structure
+        )
+
+        # Keep lines that don't look like pure instructions
+        # Lines with both instructions and content will be cleaned by regex later
+        if not looks_like_only_instructions:
             cleaned_lines.append(line)
 
     result = "\n".join(cleaned_lines)
 
     # Remove instruction phrases from remaining text (case-insensitive, with word boundaries)
     instruction_phrases_to_remove = [
-        (r"\bPAKOLLISET\s+LÄHTEET:?\s*", ""),
-        (r"\bKUNTAAN\s+", ""),
-        (r"\bKRIITTISET\s+SÄÄNNÖT\s*", ""),
-        (r"\bVASTAUSOHJE:?\s*", ""),
-        (r"\bOHJEET\s+VASTAUKSEEN\s*", ""),
-        (r"\bKäytä\s+suomeksi\s+ja\s+informatiivisesti\s*", ""),
-        (r"\bKäytä\s+suomeksi\s*", ""),
-        (r"\bVastaa\s+suomeksi\s+selkeästi\s*", ""),
-        (r"\bVastaa\s+suomeksi\s*", ""),
+        (r"(?i)\bPAKOLLISET\s+LÄHTEET:?\s*", ""),  # Explicit case-insensitive flag
+        (r"(?i)\bKUNTAAN\s+", ""),
+        (r"(?i)\bKRIITTISET\s+SÄÄNNÖT\s*", ""),
+        (r"(?i)\bVASTAUSOHJE:?\s*", ""),
+        (r"(?i)\bOHJEET\s+VASTAUKSEEN\s*", ""),
+        (r"(?i)\bKäytä\s+suomeksi\s+ja\s+informatiivisesti\s*", ""),
+        (r"(?i)\bKäytä\s+suomeksi\s*", ""),
+        (r"(?i)\bVastaa\s+suomeksi\s+selkeästi\s*", ""),
+        (r"(?i)\bVastaa\s+suomeksi\s*", ""),
     ]
 
     for phrase_pattern, replacement in instruction_phrases_to_remove:
@@ -281,8 +310,7 @@ def _remove_prompt_leakage(answer: str) -> str:
     # Clean up extra spaces
     result = re.sub(r"\s+", " ", result)
     result = re.sub(r"\s+([.!?])", r"\1", result)
-
-    result = "\n".join(cleaned_lines).strip()
+    result = result.strip()
 
     # If we removed too much (answer is too short), return original
     if len(result) < len(answer) * 0.3:

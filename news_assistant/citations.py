@@ -113,6 +113,17 @@ def compute_query_relevance(
     # Direct token overlap
     overlap = len(query_tokens & text_tokens)
     title_overlap = len(query_tokens & title_tokens)
+    
+    # For single-word queries, also check substring matches (e.g., "terveys" in "terveysuutiset")
+    if len(query_tokens) == 1:
+        query_word = list(query_tokens)[0]
+        # Check if query word appears as substring in title or text
+        if query_word in title_lower or query_word in text_lower:
+            # Boost overlap if substring match found
+            if title_overlap == 0 and query_word in title_lower:
+                title_overlap = 1  # Count substring match as overlap
+            if overlap == 0 and query_word in text_lower:
+                overlap = 1  # Count substring match as overlap
     union = len(query_tokens | text_tokens)
 
     if union == 0:
@@ -132,11 +143,31 @@ def compute_query_relevance(
 
     # If we have significant overlap (especially in title), boost more
     if title_overlap >= len(query_tokens) * 0.5:  # At least half of query tokens in title
-        base_relevance = max(base_relevance, 0.5)
+        base_relevance = max(base_relevance, 0.6)  # Boost to 0.6 for good title matches
     elif overlap > 0:
         # If any tokens match, ensure minimum relevance based on match ratio
         match_ratio = overlap / len(query_tokens)
-        base_relevance = max(base_relevance, 0.2 + (match_ratio * 0.3))  # 0.2 to 0.5 range
+        # More generous scoring: 0.3 to 0.6 range for partial matches
+        base_relevance = max(base_relevance, 0.3 + (match_ratio * 0.3))
+    
+    # Special case: if title has high overlap, boost significantly
+    # Title matches are strong signals - if title contains key terms, boost relevance
+    if title_overlap >= 2:  # At least 2 tokens in title
+        base_relevance = max(base_relevance, 0.65)
+    elif title_overlap >= 1 and overlap >= 1:  # At least 1 token in both title and text
+        # If we have matches in both title and text, it's likely relevant
+        base_relevance = max(base_relevance, 0.55)  # Boost to > 0.5
+    if title_overlap == len(query_tokens):  # All query tokens in title
+        base_relevance = max(base_relevance, 0.75)
+    
+    # Additional boost for single-word queries with good matches
+    if len(query_tokens) == 1 and overlap >= 1:
+        # Single word queries with any match should score higher
+        # If the single word appears in title, boost significantly
+        if title_overlap >= 1:
+            base_relevance = max(base_relevance, 0.4)
+        else:
+            base_relevance = max(base_relevance, 0.35)
 
     token_relevance = min(1.0, base_relevance)  # Cap at 1.0
 
@@ -179,8 +210,8 @@ def check_answerability(
         return False, f"Retrieval confidence too low (max score: {max_score:.2f} < {score_threshold})"
 
     # Check query-to-source relevance if enabled
+    relevant_sources = []
     if use_relevance_gate and query:
-        relevant_sources = []
         # Get embed_model from hits if available (passed from API)
         embed_model = None
         for h in hits:
@@ -210,8 +241,10 @@ def check_answerability(
             )
 
     # Check if we have enough content
+    # If relevance gate passed, we have relevant sources - use lower threshold
     total_text = sum(len(h.get("payload", {}).get("text", "")) for h in hits)
-    if total_text < 200:
+    min_content_length = 100 if (use_relevance_gate and query and len(relevant_sources) >= min_relevant_sources) else 200
+    if total_text < min_content_length:
         return False, f"Insufficient content (total: {total_text} chars)"
 
     return True, ""
@@ -227,19 +260,18 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     """
     warnings = []
 
-    # Extract source labels from answer - ONLY parentheses format (S1)
-    # Bracket format [S1] is completely ignored - not treated as citations
-    # This ensures [S2], [S3] etc. are completely ignored and never reported as invalid
+    # Extract source labels from answer - support both (S1) and [S1] formats
+    # Both formats are validated for source existence
     cited_with_parens = set(re.findall(r"\(S\d+\)", answer))
-    cited_labels = {label.strip("()") for label in cited_with_parens}
-    
-    # Note: bracket citations [S1] are intentionally ignored - they're not valid citation format
+    cited_with_brackets = set(re.findall(r"\[S\d+\]", answer))
+    cited_labels = {label.strip("()") for label in cited_with_parens} | {label.strip("[]") for label in cited_with_brackets}
 
     available_labels = {s.label for s in sources}
 
     # CRITICAL: Check for citations to non-existent sources (hard error)
     invalid_citations = cited_labels - available_labels
     if invalid_citations:
+        # Format invalid citations - use parentheses format for display
         invalid_formatted = {f"({label})" for label in invalid_citations}
         warnings.append(f"CRITICAL: Answer cites non-existent sources: {invalid_formatted}")
 
@@ -291,9 +323,10 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
 
         # Check if sentence looks factual
         if any(ind in sent_lower for ind in factual_indicators):
-            # Check if it has a citation - ONLY parentheses format (S1)
-            # Bracket format [S1] is ignored - not valid citations
-            if not re.search(r"\(S\d+\)", sent_clean):
+            # Check if it has a citation - accept both (S1) and [S1] formats for coverage check
+            # Note: Only (S1) format is validated for source existence, but [S1] counts as "cited" for coverage
+            # This allows backward compatibility - sentences with [S1] won't be flagged as uncited
+            if not re.search(r"\(S\d+\)|\[S\d+\]", sent_clean):
                 uncited_sentences.append(sent_clean[:150])  # Truncate for warning
 
     if uncited_sentences:
