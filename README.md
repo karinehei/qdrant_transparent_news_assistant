@@ -519,5 +519,6 @@ MIT License - see [LICENSE](LICENSE) file.
 
 - [Qdrant](https://qdrant.tech/) - Vector database
 - [FastAPI](https://fastapi.tiangolo.com/) - Web framework
-- [Mistral AI](https://mistral.ai/) - LLM provider
+- [vLLM](https://github.com/vllm-project/vllm) - High-performance LLM inference engine
+- [Microsoft Phi-3](https://www.microsoft.com/en-us/research/blog/phi-3-mini/) - LLM models (Phi-3-mini-4k-instruct)
 - [SentenceTransformers](https://www.sbert.net/) - Embeddings

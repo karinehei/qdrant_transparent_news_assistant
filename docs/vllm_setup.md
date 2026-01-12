@@ -147,6 +147,64 @@ python -m news_assistant.api
    docker logs news_vllm
    ```
 
+### "Cannot connect to vLLM" on Windows/WSL (host.docker.internal issues)
+
+If you see `Cannot connect to vLLM at http://host.docker.internal:8001`:
+
+**Solution 1: Use environment variable override (Recommended)**
+   
+   Update your `.env` file or set environment variable:
+   ```bash
+   # In .env file
+   VLLM_BASE_URL=http://localhost:8001
+   
+   # Or if vLLM is in Docker (uncomment vllm service in docker-compose.yml)
+   VLLM_BASE_URL=http://vllm:8001
+   ```
+   
+   Then restart:
+   ```bash
+   docker-compose restart api
+   ```
+
+**Solution 2: Find your host IP address**
+   
+   ```powershell
+   # Windows PowerShell - find your IP
+   ipconfig
+   # Look for IPv4 Address (e.g., 192.168.1.100)
+   
+   # Then in .env or docker-compose.yml:
+   VLLM_BASE_URL=http://192.168.1.100:8001
+   ```
+
+**Solution 3: Run vLLM in Docker (Best for production)**
+   
+   1. Uncomment the `vllm` service in `docker-compose.yml`
+   2. Set `VLLM_BASE_URL=http://vllm:8001` in your `.env` file
+   3. Restart: `docker-compose up -d`
+
+**Solution 4: Ensure vLLM is bound to 0.0.0.0**
+   
+   When starting vLLM on the host, make sure it's bound to all interfaces:
+   ```bash
+   python -m vllm.entrypoints.openai.api_server \
+       --model microsoft/Phi-3-mini-4k-instruct \
+       --port 8001 \
+       --host 0.0.0.0  # Important: not 127.0.0.1!
+   ```
+
+**Solution 5: Check Windows Firewall**
+   
+   Ensure port 8001 is allowed through Windows Firewall:
+   ```powershell
+   # Check firewall rules
+   Get-NetFirewallRule | Where-Object {$_.DisplayName -like "*8001*"}
+   
+   # Add rule if needed (run as Administrator)
+   New-NetFirewallRule -DisplayName "vLLM Port 8001" -Direction Inbound -LocalPort 8001 -Protocol TCP -Action Allow
+   ```
+
 ### "CUDA out of memory"
 
 - Use a smaller model

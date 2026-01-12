@@ -31,6 +31,26 @@ services:
       retries: 5
       start_period: 10s
 
+  # vLLM service (running in Docker)
+  # Requires NVIDIA GPU and Docker with NVIDIA Container Toolkit
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: news_vllm
+    ports:
+      - "8001:8001"
+    environment:
+      - MODEL=${VLLM_MODEL:-microsoft/Phi-3-mini-4k-instruct}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: --model ${VLLM_MODEL:-microsoft/Phi-3-mini-4k-instruct} --host 0.0.0.0 --port 8001
+    # Note: vLLM takes 2-3 minutes to fully start.
+    # The API will retry connections automatically when vLLM is ready.
+
   api:
     build:
       context: .
@@ -43,17 +63,28 @@ services:
       - AUDIT_DB_URL=postgresql://news_user:news_pass@postgres:5432/news_audit
       # LLM configuration (vLLM by default for best performance, Ollama/Mistral optional)
       - LLM_PROVIDER=${LLM_PROVIDER:-vllm}
-      - VLLM_BASE_URL=http://host.docker.internal:8001
+      # VLLM_BASE_URL: Use environment variable from .env or override here
+      # Since vLLM is running in Docker, use service name 'vllm' for internal communication
+      # Options:
+      # - If vLLM is in Docker (current setup): http://vllm:8001 (default)
+      # - If vLLM is running on host: http://host.docker.internal:8001 (Windows/Mac Docker Desktop)
+      # - If in WSL: http://localhost:8001 or use host IP
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://vllm:8001}
       - VLLM_MODEL=${VLLM_MODEL:-microsoft/Phi-3-mini-4k-instruct}
       # Uncomment if using Ollama instead:
       # - OLLAMA_MODEL=${OLLAMA_MODEL:-phi:latest}
       # - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       # Uncomment if using Mistral API:
       # - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+    # Add extra_hosts to help with host.docker.internal on Windows/WSL
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
       qdrant:
+        condition: service_started
+      vllm:
         condition: service_started
     volumes:
       - ./news_assistant:/app/news_assistant
