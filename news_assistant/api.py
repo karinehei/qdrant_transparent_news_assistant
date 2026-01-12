@@ -276,6 +276,7 @@ def _remove_prompt_leakage(answer: str) -> str:
             )
             if not has_substantial_content:
                 continue  # Skip this numbered instruction line
+            # If it has substantial content, we'll add it below
 
         # For non-numbered lines, check if they're pure instructions
         looks_like_only_instructions = (
@@ -288,9 +289,9 @@ def _remove_prompt_leakage(answer: str) -> str:
         # Lines with both instructions and content will be cleaned by regex later
         # Always keep non-numbered lines that don't match instruction patterns
         if is_numbered_line:
-            # For numbered lines, we already handled them above - only keep if they have content
-            # (This case should have been handled by the continue statement above)
-            pass
+            # For numbered lines: if we got here, it either doesn't match numbered instructions
+            # or it matches but has substantial content - in either case, keep it
+            cleaned_lines.append(line)
         else:
             # For non-numbered lines, keep them unless they're pure instructions
             if not looks_like_only_instructions:

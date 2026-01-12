@@ -261,21 +261,27 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     warnings = []
 
     # Extract source labels from answer
-    # Parentheses format (S1) is fully validated for source existence
-    # Bracket format [S1] counts for coverage but is NOT validated (ignored for source validation)
+    # Both parentheses format (S1) and bracket format [S1] are validated for source existence
     cited_with_parens = set(re.findall(r"\(S\d+\)", answer))
     cited_with_brackets = set(re.findall(r"\[S\d+\]", answer))
     cited_labels_parens = {label.strip("()") for label in cited_with_parens}
-    # cited_labels_brackets is used for coverage checking but NOT for validation
+    cited_labels_brackets = {label.strip("[]") for label in cited_with_brackets}
+    # Combine both formats for validation
+    all_cited_labels = cited_labels_parens | cited_labels_brackets
 
     available_labels = {s.label for s in sources}
 
     # CRITICAL: Check for citations to non-existent sources (hard error)
-    # Only validate parentheses citations - bracket citations are completely ignored for validation
-    invalid_citations = cited_labels_parens - available_labels
+    # Validate both parentheses and bracket citations
+    invalid_citations = all_cited_labels - available_labels
     if invalid_citations:
-        # Format invalid citations - use parentheses format for display
-        invalid_formatted = {f"({label})" for label in invalid_citations}
+        # Format invalid citations - show both formats if they appear
+        invalid_formatted = set()
+        for label in invalid_citations:
+            if label in cited_labels_parens:
+                invalid_formatted.add(f"({label})")
+            if label in cited_labels_brackets:
+                invalid_formatted.add(f"[{label}]")
         warnings.append(f"CRITICAL: Answer cites non-existent sources: {invalid_formatted}")
 
     # Check for uncited factual statements (strict check)
@@ -300,6 +306,8 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
         "vuosina",
         "is",
         "was",
+        "has",
+        "have",
         "happened",
         "said",
         "according",
@@ -332,7 +340,7 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
             # Bracket citations [S1] count as "cited" for coverage purposes (backward compatibility)
             has_paren_citation = bool(re.search(r"\(S\d+\)", sent_clean))
             has_bracket_citation = bool(re.search(r"\[S\d+\]", sent_clean))
-            
+
             # Sentence is considered cited if it has either format
             # But if it only has bracket citations, we're more lenient (they count for coverage)
             if not has_paren_citation and not has_bracket_citation:
@@ -345,22 +353,20 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
 
         # Only mark as CRITICAL if most statements are uncited (>70%)
         # For 50-70%, it's a warning but not critical
-        # For <50%, it's minor and can be auto-fixed
+        # For <50%, still warn but less severely
         if uncited_ratio > 0.7:  # More than 70% uncited - critical
             warnings.append(
-                f"CRITICAL: {len(uncited_sentences)}/{total_factual} factual statements lack citations. "
+                f"CRITICAL: {len(uncited_sentences)}/{total_factual} factual statements are uncited. "
                 f"Answer may be unreliable."
             )
         elif uncited_ratio > 0.5:  # 50-70% uncited - significant warning
             warnings.append(
-                f"Warning: {len(uncited_sentences)}/{total_factual} factual statements lack citations. "
+                f"Warning: {len(uncited_sentences)}/{total_factual} factual statements are uncited. "
                 f"Consider adding citations for better reliability."
             )
-        elif len(uncited_sentences) <= 2:  # 1-2 uncited sentences - minor, can be auto-fixed
-            # Don't warn for very minor omissions (1-2 sentences)
-            pass
-        else:  # 3+ uncited but <50% - moderate warning
-            warnings.append(f"Found {len(uncited_sentences)} potentially uncited factual statements")
+        elif len(uncited_sentences) >= 1:  # At least 1 uncited sentence - warn
+            # Warn about uncited statements even if ratio is low
+            warnings.append(f"Warning: Found {len(uncited_sentences)} uncited factual statement(s)")
 
     # Check if answer mentions sources section (now handled by _ensure_sources_section, but warn if missing)
     if "lähteet:" not in answer.lower() and "sources:" not in answer.lower():
