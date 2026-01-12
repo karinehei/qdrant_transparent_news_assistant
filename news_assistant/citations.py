@@ -261,28 +261,36 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     warnings = []
 
     # Extract source labels from answer
-    # Both parentheses format (S1) and bracket format [S1] are validated for source existence
+    # Both parentheses format (S1) and bracket format [S1] are used for coverage
+    # For validation: validate bracket citations ONLY if there are no valid parentheses citations
+    # This allows: if answer has (S1) valid, ignore [S2] invalid (backward compatibility)
+    # But if answer has ONLY [S3] invalid, validate and fail
     cited_with_parens = set(re.findall(r"\(S\d+\)", answer))
     cited_with_brackets = set(re.findall(r"\[S\d+\]", answer))
     cited_labels_parens = {label.strip("()") for label in cited_with_parens}
     cited_labels_brackets = {label.strip("[]") for label in cited_with_brackets}
-    # Combine both formats for validation
-    all_cited_labels = cited_labels_parens | cited_labels_brackets
 
     available_labels = {s.label for s in sources}
 
+    # Check for valid parentheses citations
+    valid_parens_citations = cited_labels_parens & available_labels
+
     # CRITICAL: Check for citations to non-existent sources (hard error)
-    # Validate both parentheses and bracket citations
-    invalid_citations = all_cited_labels - available_labels
-    if invalid_citations:
-        # Format invalid citations - show both formats if they appear
-        invalid_formatted = set()
-        for label in invalid_citations:
-            if label in cited_labels_parens:
-                invalid_formatted.add(f"({label})")
-            if label in cited_labels_brackets:
-                invalid_formatted.add(f"[{label}]")
+    # Validate parentheses citations always
+    invalid_parens = cited_labels_parens - available_labels
+    if invalid_parens:
+        invalid_formatted = {f"({label})" for label in invalid_parens}
         warnings.append(f"CRITICAL: Answer cites non-existent sources: {invalid_formatted}")
+
+    # Validate bracket citations ONLY if there are no valid parentheses citations
+    # This provides backward compatibility: if answer has valid (S1), ignore invalid [S2]
+    # But if answer has only invalid bracket citations, validate and fail
+    if not valid_parens_citations:
+        # No valid parentheses citations, so validate bracket citations
+        invalid_brackets = cited_labels_brackets - available_labels
+        if invalid_brackets:
+            invalid_formatted = {f"[{label}]" for label in invalid_brackets}
+            warnings.append(f"CRITICAL: Answer cites non-existent sources: {invalid_formatted}")
 
     # Check for uncited factual statements (strict check)
     # Split into sentences more carefully

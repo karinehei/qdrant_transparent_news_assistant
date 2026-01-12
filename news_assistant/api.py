@@ -300,6 +300,19 @@ def _remove_prompt_leakage(answer: str) -> str:
     # Build result from cleaned lines
     result = "\n".join(cleaned_lines) if cleaned_lines else answer
 
+    # If we removed all lines (all were instruction lines), return empty or minimal result
+    # This can happen when answer is just instructions
+    if not cleaned_lines:
+        # All lines were removed - check if original had any non-instruction content
+        # If original was all instructions, return empty; otherwise return original
+        if len(lines) > 0 and all(
+            any(kw in line.upper() for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN", "LÄHTEET"])
+            for line in lines
+            if line.strip()
+        ):
+            return ""  # All lines were instructions, return empty
+        return answer  # Something went wrong, return original
+
     # Remove instruction phrases from remaining text (case-insensitive, with word boundaries)
     instruction_phrases_to_remove = [
         (r"(?i)\bPAKOLLISET\s+LÄHTEET:?\s*", ""),  # Explicit case-insensitive flag
@@ -316,14 +329,18 @@ def _remove_prompt_leakage(answer: str) -> str:
     for phrase_pattern, replacement in instruction_phrases_to_remove:
         result = re.sub(phrase_pattern, replacement, result, flags=re.IGNORECASE | re.MULTILINE)
 
-    # Clean up extra spaces
-    result = re.sub(r"\s+", " ", result)
+    # Clean up extra spaces (but preserve newlines for now)
+    result = re.sub(r"[ \t]+", " ", result)  # Only collapse spaces/tabs, not newlines
     result = re.sub(r"\s+([.!?])", r"\1", result)
     result = result.strip()
 
-    # If we removed too much (answer is too short), return original
-    if len(result) < len(answer) * 0.3:
+    # If we removed too much (answer is too short), but only if we didn't intentionally remove instruction lines
+    # If result is empty or very short AND we removed instruction lines, that's OK - return the cleaned result
+    # Only return original if result is suspiciously short but we didn't remove anything
+    if len(result) < len(answer) * 0.3 and len(cleaned_lines) >= len(lines) * 0.8:
+        # We kept most lines but result is very short - suspicious, return original
         return answer
+    # Otherwise, if we removed instruction lines, return the cleaned result even if it's short
 
     # Final check: if result still contains instruction keywords, try to extract just the answer part
     if any(kw in result.upper() for kw in ["PAKOLLISET", "KUNTAAN", "KRIITTISET"]):
@@ -342,14 +359,35 @@ def _remove_prompt_leakage(answer: str) -> str:
     final_lines = []
     for line in result.split("\n"):
         line_stripped = line.strip()
+        if not line_stripped:
+            # Keep empty lines to preserve structure
+            final_lines.append(line)
+            continue
         # Skip lines that are just instruction patterns
         if re.match(r"^[0-9]+\.\s*[A-ZÄÖÅ]", line_stripped):
-            continue  # Skip numbered instruction lines
+            # Check if it's actually an instruction or has real content
+            content_after_num = re.sub(r"^[0-9]+\.\s*", "", line_stripped, count=1)
+            # If it's just instruction keywords, skip it
+            if any(
+                kw in content_after_num.upper()
+                for kw in ["VASTAUS", "PAKOLLISET", "KRIITTISET", "KUNTAAN", "LÄHTEET", "VAIN", "KONTEKSTISTA"]
+            ):
+                # Check if there's substantial non-keyword content
+                content_no_keywords = content_after_num
+                for kw in ["VASTAUS", "VAIN", "KONTEKSTISTA", "PAKOLLISET", "LÄHTEET", "KRIITTISET", "KUNTAAN"]:
+                    content_no_keywords = re.sub(rf"\b{kw}\b", "", content_no_keywords, flags=re.IGNORECASE)
+                if len(content_no_keywords.strip()) <= 5:  # Very little non-keyword content
+                    continue  # Skip this numbered instruction line
         if re.match(r"^-\s*[A-ZÄÖÅ]", line_stripped) and any(kw in line_stripped.upper() for kw in ["KÄYTÄ", "ÄLÄ", "TÄYTYY"]):
             continue  # Skip bullet instruction lines
         final_lines.append(line)
 
     result = "\n".join(final_lines).strip()
+
+    # Final safety check: if result is empty but we had cleaned_lines, something went wrong
+    if not result and cleaned_lines:
+        # Rebuild from cleaned_lines as fallback
+        result = "\n".join(cleaned_lines).strip()
 
     return result
 
