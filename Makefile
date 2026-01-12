@@ -66,8 +66,8 @@ migrate:
 # Fix Docker credential issues (run this if build fails with credential errors)
 fix-docker-creds:
 	@echo "Fixing Docker credential helper issues..."
-	@if [ -f "./fix_docker_creds.sh" ]; then \
-		bash ./fix_docker_creds.sh; \
+	@if [ -f "./scripts/fix_docker_creds.sh" ]; then \
+		bash ./scripts/fix_docker_creds.sh; \
 	else \
 		echo "Running manual fix..."; \
 		DOCKER_CONFIG=$${DOCKER_CONFIG:-$$HOME/.docker/config.json}; \
