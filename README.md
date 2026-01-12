@@ -340,22 +340,51 @@ qdrant_transparent_news_assistant/
 │   ├── retrieval.py         # Hybrid search
 │   ├── citations.py         # Citation logic
 │   ├── safety.py            # Safety checks
-│   ├── llm.py               # LLM integration (Ollama/Mistral)
+│   ├── llm.py               # LLM integration (vLLM/Ollama/Mistral)
 │   ├── middleware.py        # Rate limiting, CORS
+│   ├── intent.py            # Query intent detection
 │   └── ingestors/           # Ingestion adapters
 │       ├── base.py          # Base interface
 │       ├── rss.py           # RSS ingestor
 │       └── yle.py           # Yle API (scaffold)
+├── scripts/                 # Utility scripts
+│   ├── run_news_api.py      # API entry point
+│   ├── tools.py             # CLI tool for indexing/searching
+│   ├── demo.sh              # Demo script
+│   ├── make.ps1             # PowerShell Makefile
+│   ├── fix_docker_creds.*   # Docker credential fix scripts
+│   └── legacy/              # Legacy demo scripts (reference only)
+│       ├── mini_rag_pipeline_qdrant.py
+│       ├── document_processing.py
+│       ├── indexing.py
+│       ├── retrieval.py
+│       ├── prompting.py
+│       └── config.py
+├── docs/                    # Documentation
+│   ├── architecture.md      # System architecture
+│   ├── deployment.md         # Deployment guide
+│   ├── rag_implementation.md # RAG implementation details
+│   ├── security.md          # Security documentation
+│   ├── usage.md             # Usage guide
+│   ├── vllm_setup.md        # vLLM setup guide
+│   ├── API.md               # API documentation
+│   └── IMPLEMENTATION_SUMMARY.md
 ├── web/                     # React frontend
 │   ├── src/
 │   │   ├── components/      # React components
 │   │   └── types/           # TypeScript types
 │   └── package.json
 ├── tests/                   # Test suite
+├── utils/                   # Utility modules
+│   ├── groundedness_proxy.py
+│   ├── latency_utils.py
+│   └── metrics_relevance.py
 ├── alembic/                 # Database migrations
 ├── docker-compose.yml       # Local development
 ├── Dockerfile              # API container
 ├── Makefile                # Convenience commands
+├── requirements.txt        # Python dependencies
+├── pyproject.toml         # Project configuration
 └── README.md               # This file
 ```
 
