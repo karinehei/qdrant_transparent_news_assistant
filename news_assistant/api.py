@@ -268,7 +268,7 @@ def _remove_prompt_leakage(answer: str) -> str:
             for kw in ["VASTAUS", "VAIN", "KONTEKSTISTA", "PAKOLLISET", "LÄHTEET", "KRIITTISET", "KUNTAAN"]:
                 content_without_keywords = re.sub(rf"\b{kw}\b", "", content_without_keywords, flags=re.IGNORECASE)
             content_without_keywords = content_without_keywords.strip()
-            
+
             has_substantial_content = (
                 len(content_without_keywords) > 15  # At least 15 chars of non-keyword content
                 or re.search(r"[.!?]\s+[A-ZÄÖÅ]", content_after_number)  # Has sentence structure
@@ -276,7 +276,7 @@ def _remove_prompt_leakage(answer: str) -> str:
             )
             if not has_substantial_content:
                 continue  # Skip this numbered instruction line
-        
+
         # For non-numbered lines, check if they're pure instructions
         looks_like_only_instructions = (
             (has_keyword or matches_marker)
@@ -286,10 +286,18 @@ def _remove_prompt_leakage(answer: str) -> str:
 
         # Keep lines that don't look like pure instructions
         # Lines with both instructions and content will be cleaned by regex later
-        if not looks_like_only_instructions:
-            cleaned_lines.append(line)
+        # Always keep non-numbered lines that don't match instruction patterns
+        if is_numbered_line:
+            # For numbered lines, we already handled them above - only keep if they have content
+            # (This case should have been handled by the continue statement above)
+            pass
+        else:
+            # For non-numbered lines, keep them unless they're pure instructions
+            if not looks_like_only_instructions:
+                cleaned_lines.append(line)
 
-    result = "\n".join(cleaned_lines)
+    # Build result from cleaned lines
+    result = "\n".join(cleaned_lines) if cleaned_lines else answer
 
     # Remove instruction phrases from remaining text (case-insensitive, with word boundaries)
     instruction_phrases_to_remove = [

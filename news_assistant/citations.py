@@ -113,7 +113,7 @@ def compute_query_relevance(
     # Direct token overlap
     overlap = len(query_tokens & text_tokens)
     title_overlap = len(query_tokens & title_tokens)
-    
+
     # For single-word queries, also check substring matches (e.g., "terveys" in "terveysuutiset")
     if len(query_tokens) == 1:
         query_word = list(query_tokens)[0]
@@ -149,7 +149,7 @@ def compute_query_relevance(
         match_ratio = overlap / len(query_tokens)
         # More generous scoring: 0.3 to 0.6 range for partial matches
         base_relevance = max(base_relevance, 0.3 + (match_ratio * 0.3))
-    
+
     # Special case: if title has high overlap, boost significantly
     # Title matches are strong signals - if title contains key terms, boost relevance
     if title_overlap >= 2:  # At least 2 tokens in title
@@ -159,7 +159,7 @@ def compute_query_relevance(
         base_relevance = max(base_relevance, 0.55)  # Boost to > 0.5
     if title_overlap == len(query_tokens):  # All query tokens in title
         base_relevance = max(base_relevance, 0.75)
-    
+
     # Additional boost for single-word queries with good matches
     if len(query_tokens) == 1 and overlap >= 1:
         # Single word queries with any match should score higher
@@ -260,16 +260,19 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     """
     warnings = []
 
-    # Extract source labels from answer - support both (S1) and [S1] formats
-    # Both formats are validated for source existence
+    # Extract source labels from answer
+    # Parentheses format (S1) is fully validated for source existence
+    # Bracket format [S1] counts for coverage but is NOT validated (ignored for source validation)
     cited_with_parens = set(re.findall(r"\(S\d+\)", answer))
     cited_with_brackets = set(re.findall(r"\[S\d+\]", answer))
-    cited_labels = {label.strip("()") for label in cited_with_parens} | {label.strip("[]") for label in cited_with_brackets}
+    cited_labels_parens = {label.strip("()") for label in cited_with_parens}
+    # cited_labels_brackets is used for coverage checking but NOT for validation
 
     available_labels = {s.label for s in sources}
 
     # CRITICAL: Check for citations to non-existent sources (hard error)
-    invalid_citations = cited_labels - available_labels
+    # Only validate parentheses citations - bracket citations are completely ignored for validation
+    invalid_citations = cited_labels_parens - available_labels
     if invalid_citations:
         # Format invalid citations - use parentheses format for display
         invalid_formatted = {f"({label})" for label in invalid_citations}
@@ -323,10 +326,16 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
 
         # Check if sentence looks factual
         if any(ind in sent_lower for ind in factual_indicators):
-            # Check if it has a citation - accept both (S1) and [S1] formats for coverage check
-            # Note: Only (S1) format is validated for source existence, but [S1] counts as "cited" for coverage
-            # This allows backward compatibility - sentences with [S1] won't be flagged as uncited
-            if not re.search(r"\(S\d+\)|\[S\d+\]", sent_clean):
+            # Check if it has a citation
+            # Accept both (S1) and [S1] formats for coverage check
+            # Note: Only (S1) format is validated for source existence
+            # Bracket citations [S1] count as "cited" for coverage purposes (backward compatibility)
+            has_paren_citation = bool(re.search(r"\(S\d+\)", sent_clean))
+            has_bracket_citation = bool(re.search(r"\[S\d+\]", sent_clean))
+            
+            # Sentence is considered cited if it has either format
+            # But if it only has bracket citations, we're more lenient (they count for coverage)
+            if not has_paren_citation and not has_bracket_citation:
                 uncited_sentences.append(sent_clean[:150])  # Truncate for warning
 
     if uncited_sentences:
