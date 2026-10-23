@@ -1,10 +1,10 @@
 """Test citation functionality."""
 
 from news_assistant.citations import (
+    SourceRef,
     assign_source_labels,
     check_answerability,
     check_citation_coverage,
-    SourceRef,
 )
 
 

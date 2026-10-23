@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+
 import requests
 
 # Optional import for Mistral (only needed if using mistral provider)
@@ -12,7 +12,7 @@ except ImportError:
 
 
 class LLM:
-    def __init__(self, provider: str, model: str, api_key: Optional[str] = None, base_url: Optional[str] = None):
+    def __init__(self, provider: str, model: str, api_key: str | None = None, base_url: str | None = None):
         """
         Initialize LLM client.
 

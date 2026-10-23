@@ -1,46 +1,58 @@
 from __future__ import annotations
+
+import json
 import logging
 import re
-import json
 import time
 from collections import Counter
 from contextlib import asynccontextmanager
-from typing import List, Optional
+
 from fastapi import FastAPI, HTTPException, Request
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer, CrossEncoder
+from sentence_transformers import CrossEncoder, SentenceTransformer
 
-from .settings import settings
-from .middleware import setup_cors, RequestLoggingMiddleware, RateLimitMiddleware
-from .ingestors import RSSIngestor
-from .qdrant_store import ensure_collection, index_articles, delete_article_by_url, delete_article_by_id
-from .retrieval import hybrid_search
-from .citations import assign_source_labels, build_cited_prompt, check_answerability, check_citation_coverage, SourceRef
-from .intent import sort_sources_by_timestamp, parse_query_intent, STOPWORDS_FI
-from .safety import sanitize_context, any_context_is_suspicious
-from .llm import LLM
 from .audit_db import (
+    ChatRun,
+    IngestionRun,
+    RetrievalHit,
     get_engine,
     init_db,
-    ChatRun,
-    RetrievalHit,
-    IngestionRun,
-    save_run,
-    save_ingestion_run,
     list_runs,
     read_run,
+    save_ingestion_run,
+    save_run,
 )
+from .citations import (
+    SourceRef,
+    assign_source_labels,
+    build_cited_prompt,
+    check_answerability,
+    check_citation_coverage,
+)
+from .ingestors import RSSIngestor
+from .intent import STOPWORDS_FI, parse_query_intent, sort_sources_by_timestamp
+from .llm import LLM
+from .middleware import RateLimitMiddleware, RequestLoggingMiddleware, setup_cors
+from .qdrant_store import (
+    delete_article_by_id,
+    delete_article_by_url,
+    ensure_collection,
+    index_articles,
+)
+from .retrieval import hybrid_search
+from .safety import any_context_is_suspicious, sanitize_context
 from .schemas import (
-    IngestRequest,
-    IngestResponse,
     ChatRequest,
     ChatResponse,
-    SourceItem,
-    HitItem,
-    RunItem,
     DeleteArticleRequest,
     DeleteArticleResponse,
+    HitItem,
+    IngestRequest,
+    IngestResponse,
+    RunItem,
+    SourceItem,
 )
+from .settings import settings
 
 # Configure structured logging
 logging.basicConfig(
@@ -392,7 +404,7 @@ def _remove_prompt_leakage(answer: str) -> str:
     return result
 
 
-def _parse_structured_output(answer_raw: str, sources: List[SourceRef]) -> tuple[str, List[str]]:
+def _parse_structured_output(answer_raw: str, sources: list[SourceRef]) -> tuple[str, list[str]]:
     """
     Parse structured JSON output from LLM.
 
@@ -437,7 +449,7 @@ def _parse_structured_output(answer_raw: str, sources: List[SourceRef]) -> tuple
     return None, []
 
 
-def _remove_bracket_citations(answer: str, sources: List[SourceRef]) -> str:
+def _remove_bracket_citations(answer: str, sources: list[SourceRef]) -> str:
     """
     Remove bracket citations [S1] from answer - they're not valid.
     This prevents audit from flagging them as non-existent sources.
@@ -462,7 +474,7 @@ def _remove_bracket_citations(answer: str, sources: List[SourceRef]) -> str:
     return result.strip()
 
 
-def _validate_citations(answer: str, sources: List[SourceRef], warnings: List[str]) -> str:
+def _validate_citations(answer: str, sources: list[SourceRef], warnings: list[str]) -> str:
     """
     Validate that all citations in answer reference existing sources.
     Remove invalid citations.
@@ -488,7 +500,7 @@ def _validate_citations(answer: str, sources: List[SourceRef], warnings: List[st
     return answer.strip()
 
 
-def _ensure_sources_section(answer: str, sources: List[SourceRef], sources_used: Optional[List[str]] = None) -> str:
+def _ensure_sources_section(answer: str, sources: list[SourceRef], sources_used: list[str] | None = None) -> str:
     """
     Ensure the answer always includes a Sources section.
     If missing, append it with all sources that have citations in the answer.
@@ -528,7 +540,7 @@ def _ensure_sources_section(answer: str, sources: List[SourceRef], sources_used:
     return answer
 
 
-def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List[str]) -> str:
+def _add_missing_citations(answer: str, sources: list[SourceRef], warnings: list[str]) -> str:
     """
     Attempt to automatically add citations to uncited factual statements.
     This is a best-effort approach - if too many citations are missing, we should refuse.
@@ -577,11 +589,9 @@ def _add_missing_citations(answer: str, sources: List[SourceRef], warnings: List
         if "lähteet:" in sent_clean.lower() or "sources:" in sent_clean.lower():
             continue
         sent_lower = sent_clean.lower()
-        # Check if sentence looks factual
-        if any(ind in sent_lower for ind in factual_indicators):
-            # Check if it has a citation
-            if not re.search(r"\[S\d+\]", sent_clean):
-                uncited_sentences.append((i, sent_clean))
+        # Check if sentence looks factual and lacks a citation
+        if any(ind in sent_lower for ind in factual_indicators) and not re.search(r"\[S\d+\]", sent_clean):
+            uncited_sentences.append((i, sent_clean))
 
     # If too many uncited sentences, don't try to fix (would be unreliable)
     total_factual = len([s for s in sentences if any(ind in s.lower() for ind in factual_indicators)])
@@ -1000,8 +1010,8 @@ def chat(req: ChatRequest, request: Request):
     prompt = build_cited_prompt(question, hits_labeled, sources)
 
     llm = _llm()
-    warnings: List[str] = []
-    sources_used: List[str] = []  # Track which sources were actually used
+    warnings: list[str] = []
+    sources_used: list[str] = []  # Track which sources were actually used
 
     try:
         answer_raw = llm.generate(prompt, max_tokens=settings.max_answer_tokens)
@@ -1107,7 +1117,7 @@ Vastaa suomeksi. Jokainen faktaväite tarvitsee lähdeviitteen muodossa (S1), (S
     except Exception as e:
         answer = "Virhe LLM-kutsussa."
         err = str(e)
-        warnings.append(f"LLM error: {str(e)}")
+        warnings.append(f"LLM error: {e!s}")
 
     latency_ms = (time.time() - start_time) * 1000
 
@@ -1241,7 +1251,7 @@ def ready():
         return {"status": "ready"}
     except Exception as e:
         logger.error("readiness_check_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=503, detail=f"Not ready: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Not ready: {e!s}")
 
 
 @app.delete("/articles", response_model=DeleteArticleResponse)

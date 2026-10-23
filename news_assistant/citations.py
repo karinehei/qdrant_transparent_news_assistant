@@ -1,7 +1,7 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Dict, List, Tuple
+
 import re
+from dataclasses import dataclass
 
 
 @dataclass
@@ -14,12 +14,12 @@ class SourceRef:
     publisher: str | None
 
 
-def assign_source_labels(hits: List[Dict]) -> Tuple[List[Dict], List[SourceRef]]:
+def assign_source_labels(hits: list[dict]) -> tuple[list[dict], list[SourceRef]]:
     """Assign stable labels [S1], [S2] ... to unique sources inside hits.
     Expects each hit payload to include: source_id (or source), title, url (optional), published_at (optional), publisher(optional).
     """
-    sources: Dict[str, SourceRef] = {}
-    ordered: List[str] = []
+    sources: dict[str, SourceRef] = {}
+    ordered: list[str] = []
     for h in hits:
         p = h.get("payload", {}) if "payload" in h else h
         key = p.get("source_id") or p.get("source") or p.get("url") or p.get("uid") or "unknown"
@@ -46,7 +46,7 @@ def assign_source_labels(hits: List[Dict]) -> Tuple[List[Dict], List[SourceRef]]
 
 
 def compute_query_relevance(
-    query: str, hit_text: str, hit_title: str = "", embed_model=None, vector_score: float = None
+    query: str, hit_text: str, hit_title: str = "", embed_model=None, vector_score: float | None = None
 ) -> float:
     """
     Compute relevance score between query and a hit.
@@ -63,6 +63,7 @@ def compute_query_relevance(
         Relevance score between 0.0 and 1.0
     """
     import re
+
     import numpy as np
 
     # If we have vector_score from retrieval, use it as primary signal (it's already semantic)
@@ -116,7 +117,7 @@ def compute_query_relevance(
 
     # For single-word queries, also check substring matches (e.g., "terveys" in "terveysuutiset")
     if len(query_tokens) == 1:
-        query_word = list(query_tokens)[0]
+        query_word = next(iter(query_tokens))
         # Check if query word appears as substring in title or text
         if query_word in title_lower or query_word in text_lower:
             # Boost overlap if substring match found
@@ -179,7 +180,7 @@ def compute_query_relevance(
 
 
 def check_answerability(
-    hits: List[Dict],
+    hits: list[dict],
     query: str,
     score_threshold: float = 0.3,
     relevance_threshold: float = 0.35,
@@ -250,7 +251,7 @@ def check_answerability(
     return True, ""
 
 
-def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool, List[str]]:
+def check_citation_coverage(answer: str, sources: list[SourceRef]) -> tuple[bool, list[str]]:
     """
     Strictly check if answer has citations for factual claims.
     This is a hard requirement - answers without proper citations are considered invalid.
@@ -337,7 +338,7 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
         sent_lower = sent_clean.lower()
 
         # Skip if it's just "Lähteet:" or similar
-        if sent_lower.startswith("lähteet:") or sent_lower.startswith("sources:"):
+        if sent_lower.startswith(("lähteet:", "sources:")):
             continue
 
         # Check if sentence looks factual
@@ -384,7 +385,7 @@ def check_citation_coverage(answer: str, sources: List[SourceRef]) -> tuple[bool
     return has_coverage, warnings
 
 
-def build_cited_prompt(question: str, hits: List[Dict], sources: List[SourceRef]) -> str:
+def build_cited_prompt(question: str, hits: list[dict], sources: list[SourceRef]) -> str:
     ctx_lines = []
     for i, h in enumerate(hits, start=1):
         p = h.get("payload", {}) if "payload" in h else h

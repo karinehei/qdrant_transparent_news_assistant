@@ -1,8 +1,12 @@
 """Test topic-based retrieval and filtering."""
 
-from news_assistant.intent import parse_query_intent, extract_topic
-from news_assistant.citations import compute_query_relevance, check_citation_coverage, SourceRef
-from news_assistant.api import _validate_citations, _parse_structured_output
+from news_assistant.api import _parse_structured_output, _validate_citations
+from news_assistant.citations import (
+    SourceRef,
+    check_citation_coverage,
+    compute_query_relevance,
+)
+from news_assistant.intent import extract_topic, parse_query_intent
 
 
 def test_topic_extraction():
@@ -152,7 +156,7 @@ def test_citation_format_validation():
 
     # Answer with bracket citations (should be ignored by audit)
     answer = "This is a fact [S2]. Another fact [S3]. Valid fact (S1)."
-    has_coverage, warnings = check_citation_coverage(answer, sources)
+    _has_coverage, warnings = check_citation_coverage(answer, sources)
 
     # Should NOT report [S2] or [S3] as non-existent
     non_existent_warnings = [w for w in warnings if "non-existent" in w.lower() and ("S2" in w or "S3" in w)]

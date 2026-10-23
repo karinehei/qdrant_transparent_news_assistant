@@ -1,9 +1,10 @@
 """Yle API ingestor (scaffold with mock mode)."""
 
 from __future__ import annotations
+
 import logging
 import os
-from typing import List, Optional
+
 import requests
 
 from .base import Article, Ingestor, IngestResult
@@ -17,7 +18,7 @@ YLE_API_BASE = "https://external.api.yle.fi/v1"
 class YleIngestor(Ingestor):
     """Yle API ingestor with mock mode for development."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize Yle ingestor.
 
@@ -31,7 +32,7 @@ class YleIngestor(Ingestor):
     def fetch_articles(
         self,
         source_ref: str,
-        publisher: Optional[str] = "Yle",
+        publisher: str | None = "Yle",
         limit: int = 30,
     ) -> IngestResult:
         """
@@ -45,8 +46,8 @@ class YleIngestor(Ingestor):
         Returns:
             IngestResult with articles and metadata
         """
-        errors: List[str] = []
-        articles: List[Article] = []
+        errors: list[str] = []
+        articles: list[Article] = []
 
         if self.mock_mode:
             logger.warning("YleIngestor running in mock mode (no API key). Returning sample data.")
@@ -113,16 +114,16 @@ class YleIngestor(Ingestor):
                         if article.text:
                             articles.append(article)
                     except Exception as e:
-                        errors.append(f"Error parsing article: {str(e)}")
+                        errors.append(f"Error parsing article: {e!s}")
 
         except requests.exceptions.RequestException as e:
-            error_msg = f"Yle API request failed: {str(e)}"
+            error_msg = f"Yle API request failed: {e!s}"
             errors.append(error_msg)
             logger.error(error_msg)
         except Exception as e:
-            error_msg = f"Error processing Yle API response: {str(e)}"
+            error_msg = f"Error processing Yle API response: {e!s}"
             errors.append(error_msg)
-            logger.error(error_msg, exc_info=True)
+            logger.exception(error_msg)
 
         return IngestResult(
             articles=articles,

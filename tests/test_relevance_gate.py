@@ -1,10 +1,10 @@
 """Test relevance gate and citation enforcement."""
 
 from news_assistant.citations import (
+    SourceRef,
     check_answerability,
     check_citation_coverage,
     compute_query_relevance,
-    SourceRef,
 )
 
 

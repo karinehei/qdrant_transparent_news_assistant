@@ -1,15 +1,17 @@
 """Middleware for rate limiting, CORS, and request logging."""
 
 from __future__ import annotations
-import time
+
 import logging
+import time
 import uuid
-from typing import Callable
+from collections import defaultdict
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+
 from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from collections import defaultdict
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_id = request.client.host if request.client else "unknown"
 
         # Clean old entries
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         _rate_limit_store[client_id] = [ts for ts in _rate_limit_store[client_id] if now - ts < _rate_limit_window]
 
         # Check rate limit
@@ -84,14 +86,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000
-            logger.error(
-                f"request_error request_id={request_id} error={str(e)} latency_ms={latency_ms:.2f}",
+            logger.exception(
+                f"request_error request_id={request_id} latency_ms={latency_ms:.2f}",
                 extra={
                     "request_id": request_id,
                     "error": str(e),
                     "latency_ms": latency_ms,
                 },
-                exc_info=True,
             )
             raise
 

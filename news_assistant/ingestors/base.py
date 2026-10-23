@@ -1,9 +1,9 @@
 """Base classes for ingestion adapters."""
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
 
 
 @dataclass
@@ -13,21 +13,21 @@ class Article:
     url: str
     title: str
     text: str
-    published_at: Optional[str] = None  # ISO format string
-    publisher: Optional[str] = None
-    language: Optional[str] = None
-    tags: Optional[List[str]] = None
-    section: Optional[str] = None
-    source_id: Optional[str] = None  # Internal ID from source
+    published_at: str | None = None  # ISO format string
+    publisher: str | None = None
+    language: str | None = None
+    tags: list[str] | None = None
+    section: str | None = None
+    source_id: str | None = None  # Internal ID from source
 
 
 @dataclass
 class IngestResult:
     """Result of an ingestion run."""
 
-    articles: List[Article]
+    articles: list[Article]
     count_ingested: int
-    errors: List[str]
+    errors: list[str]
     source_type: str
     source_ref: str  # Feed URL, API endpoint, etc.
 
@@ -39,7 +39,7 @@ class Ingestor(ABC):
     def fetch_articles(
         self,
         source_ref: str,
-        publisher: Optional[str] = None,
+        publisher: str | None = None,
         limit: int = 30,
     ) -> IngestResult:
         """
@@ -53,4 +53,3 @@ class Ingestor(ABC):
         Returns:
             IngestResult with articles and metadata
         """
-        pass

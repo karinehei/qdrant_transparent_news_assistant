@@ -1,7 +1,11 @@
 """Test prompt leakage fixes and citation validation."""
 
-from news_assistant.api import _remove_prompt_leakage, _has_instruction_leakage, _remove_bracket_citations
-from news_assistant.citations import check_citation_coverage, SourceRef
+from news_assistant.api import (
+    _has_instruction_leakage,
+    _remove_bracket_citations,
+    _remove_prompt_leakage,
+)
+from news_assistant.citations import SourceRef, check_citation_coverage
 
 
 def test_prompt_leakage_detection():
@@ -63,7 +67,7 @@ def test_audit_ignores_bracket_citations():
 
     # Answer with bracket citations (should be ignored)
     answer = "This is a fact [S2]. Another fact [S3]. Valid fact (S1)."
-    has_coverage, warnings = check_citation_coverage(answer, sources)
+    _has_coverage, warnings = check_citation_coverage(answer, sources)
 
     # Should NOT report [S2] or [S3] as non-existent sources
     non_existent_warnings = [w for w in warnings if "non-existent" in w.lower()]

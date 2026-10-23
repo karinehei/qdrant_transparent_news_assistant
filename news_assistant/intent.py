@@ -1,10 +1,10 @@
 """Intent detection and topic extraction for user queries."""
 
 import re
-from typing import Tuple, Optional
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+_MIN_AWARE = datetime.min.replace(tzinfo=UTC)
 
 LATEST_INTENT_PATTERNS = [
     r"\bviimeinen\s+uutinen\b",
@@ -30,7 +30,6 @@ STOPWORDS_FI = {
     "uutisia",
     "uutinen",
     "uutista",
-    "uutisista",
     "uutisista",
     "aiheesta",
     "aihe",
@@ -97,12 +96,12 @@ class QueryIntent:
     """Structured query intent information."""
 
     intent: str  # "latest" | "topic" | "general"
-    topic: Optional[str] = None  # Extracted topic string (e.g., "terveys", "talous")
-    geo: Optional[str] = None  # Extracted geographic filter (e.g., "FI" for Finland)
+    topic: str | None = None  # Extracted topic string (e.g., "terveys", "talous")
+    geo: str | None = None  # Extracted geographic filter (e.g., "FI" for Finland)
     original_query: str = ""
 
 
-def extract_topic(query: str) -> Optional[str]:
+def extract_topic(query: str) -> str | None:
     """
     Extract topic from query patterns like "uutiset <X>", "uutisia <X>", "<X> uutiset".
 
@@ -155,7 +154,7 @@ def extract_topic(query: str) -> Optional[str]:
     return None
 
 
-def detect_intent(query: str) -> Tuple[bool, bool]:
+def detect_intent(query: str) -> tuple[bool, bool]:
     """
     Detect user intent from query.
 
@@ -170,7 +169,7 @@ def detect_intent(query: str) -> Tuple[bool, bool]:
     return is_latest, is_headlines
 
 
-def extract_geo(query: str) -> Optional[str]:
+def extract_geo(query: str) -> str | None:
     """
     Extract geographic filter from query.
 
@@ -243,19 +242,22 @@ def sort_sources_by_timestamp(hits: list, reverse: bool = True) -> list:
         timestamp_str = payload.get("published_at")
         if not timestamp_str:
             # Missing timestamp = treat as oldest
-            return datetime.min
+            return _MIN_AWARE
         try:
             # Try ISO format first
             if "T" in timestamp_str:
-                return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(timestamp_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                return dt
             # Try other formats
             for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d"]:
                 try:
-                    return datetime.strptime(timestamp_str, fmt)
+                    return datetime.strptime(timestamp_str, fmt).replace(tzinfo=UTC)
                 except ValueError:
                     continue
-            return datetime.min
+            return _MIN_AWARE
         except (ValueError, AttributeError):
-            return datetime.min
+            return _MIN_AWARE
 
     return sorted(hits, key=get_timestamp, reverse=reverse)

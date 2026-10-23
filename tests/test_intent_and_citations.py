@@ -1,8 +1,8 @@
 """Test intent detection, citation format, and prompt leakage fixes."""
 
-from news_assistant.intent import detect_intent, sort_sources_by_timestamp
-from news_assistant.citations import check_citation_coverage, SourceRef
 from news_assistant.api import _remove_prompt_leakage
+from news_assistant.citations import SourceRef, check_citation_coverage
+from news_assistant.intent import detect_intent, sort_sources_by_timestamp
 
 
 def test_latest_intent_detection():
@@ -54,13 +54,13 @@ def test_citation_format_parentheses():
 
     # Answer with parentheses format (correct)
     answer = "This is a fact (S1). Another fact (S2). Lähteet: - (S1) Article 1 — http://example.com/1"
-    has_coverage, warnings = check_citation_coverage(answer, sources)
+    _has_coverage, warnings = check_citation_coverage(answer, sources)
     # Should have coverage or minimal warnings
     assert len([w for w in warnings if "CRITICAL" in w]) == 0
 
     # Answer with brackets format (backward compatibility)
     answer_brackets = "This is a fact [S1]. Another fact [S2]."
-    has_coverage_b, warnings_b = check_citation_coverage(answer_brackets, sources)
+    _has_coverage_b, warnings_b = check_citation_coverage(answer_brackets, sources)
     # Should also work
     assert len([w for w in warnings_b if "CRITICAL" in w]) == 0
 
@@ -93,6 +93,6 @@ def test_audit_ignores_procedural_sentences():
 
     # Answer with procedural sentence (should not require citation)
     answer = "Tässä viimeisin uutinen: Tämä on fakta (S1). Lähteet: - (S1) Article 1"
-    has_coverage, warnings = check_citation_coverage(answer, sources)
+    _has_coverage, warnings = check_citation_coverage(answer, sources)
     # Procedural sentence "Tässä viimeisin uutinen:" should not trigger citation requirement
     assert len([w for w in warnings if "CRITICAL" in w]) == 0

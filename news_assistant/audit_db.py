@@ -1,14 +1,24 @@
 from __future__ import annotations
-from typing import Optional, List, Dict, Any
+
 from datetime import datetime
-from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, select, Column
+from typing import Any
+
 from sqlalchemy import JSON as SQLJSON
+from sqlmodel import (
+    Column,
+    Field,
+    Relationship,
+    Session,
+    SQLModel,
+    create_engine,
+    select,
+)
 
 # Removed joinedload import - relationships are handled manually for compatibility
 
 
 class ChatRun(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     # User context (optional, for multi-user scenarios)
@@ -29,13 +39,13 @@ class ChatRun(SQLModel, table=True):
     score_threshold: float
 
     # Store retrieval params as JSON for flexibility
-    retrieval_params: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(SQLJSON))
+    retrieval_params: dict[str, Any] = Field(default_factory=dict, sa_column=Column(SQLJSON))
 
     suspicious_context: bool = False
     error: str | None = None
 
     # Warnings as JSON array
-    warnings: List[str] = Field(default_factory=list, sa_column=Column(SQLJSON))
+    warnings: list[str] = Field(default_factory=list, sa_column=Column(SQLJSON))
 
     # Latency in milliseconds
     latency_ms: float | None = None
@@ -44,7 +54,7 @@ class ChatRun(SQLModel, table=True):
 
 
 class RetrievalHit(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     run_id: int = Field(foreign_key="chatrun.id", index=True)
 
     rank: int | None = None  # Rank in retrieval results (1-based)
@@ -66,14 +76,14 @@ class RetrievalHit(SQLModel, table=True):
 class IngestionRun(SQLModel, table=True):
     """Track ingestion runs for audit trail."""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     source_type: str  # "rss", "yle", etc.
     source_ref: str  # Feed URL, API endpoint, etc.
 
     count_ingested: int = 0
-    errors: List[str] = Field(default_factory=list, sa_column=Column(SQLJSON))
+    errors: list[str] = Field(default_factory=list, sa_column=Column(SQLJSON))
 
     # Optional metadata
     publisher: str | None = None
@@ -83,8 +93,8 @@ class IngestionRun(SQLModel, table=True):
 # Define relationships after both classes are declared to avoid forward reference issues
 # This pattern avoids SQLAlchemy's generic type annotation parsing issues
 # See docs/sqlmodel_relationships.md for details on why this is necessary
-ChatRun.hits: List["RetrievalHit"] = Relationship(back_populates="run")  # type: ignore
-RetrievalHit.run: "ChatRun" = Relationship(back_populates="hits")  # type: ignore
+ChatRun.hits: list[RetrievalHit] = Relationship(back_populates="run")  # type: ignore
+RetrievalHit.run: ChatRun = Relationship(back_populates="hits")  # type: ignore
 
 
 def get_engine(db_url: str):

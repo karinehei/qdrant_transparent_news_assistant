@@ -1,12 +1,11 @@
 from __future__ import annotations
-from typing import List, Dict, Optional
-from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer, CrossEncoder
 
-from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
 
 import numpy as np
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
+from sentence_transformers import CrossEncoder, SentenceTransformer
 
 
 def ensure_collection(client: QdrantClient, collection: str, dim: int):
@@ -19,7 +18,7 @@ def ensure_collection(client: QdrantClient, collection: str, dim: int):
         )
 
 
-def chunk(text: str, max_len: int = 300) -> List[Dict[str, any]]:
+def chunk(text: str, max_len: int = 300) -> list[dict[str, any]]:
     """
     Stable sentence-based chunking with metadata.
 
@@ -65,7 +64,7 @@ def chunk(text: str, max_len: int = 300) -> List[Dict[str, any]]:
     return chunks
 
 
-def build_corpus_from_articles(articles: List[Dict]) -> List[Dict]:
+def build_corpus_from_articles(articles: list[dict]) -> list[dict]:
     """
     Build corpus from articles with stable chunk IDs and metadata.
 
@@ -108,7 +107,7 @@ def index_articles(
     client: QdrantClient,
     collection: str,
     embed_model: SentenceTransformer,
-    articles: List[Dict],
+    articles: list[dict],
     incremental: bool = True,
 ) -> int:
     """
@@ -166,7 +165,7 @@ def delete_article_by_url(
     Returns:
         Number of points deleted
     """
-    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
 
     # Search for all points with this URL
     filter_condition = Filter(must=[FieldCondition(key="url", match=MatchValue(value=url))])
@@ -204,7 +203,7 @@ def delete_article_by_id(
     Returns:
         Number of points deleted
     """
-    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
 
     filter_condition = Filter(must=[FieldCondition(key="article_id", match=MatchValue(value=article_id))])
 
@@ -229,7 +228,7 @@ def _nz_norm(x: np.ndarray) -> np.ndarray:
     return x if n == 0 else x / n
 
 
-def mmr_select(query_vec: np.ndarray, doc_vecs: List[np.ndarray], top_n: int = 6, lam: float = 0.6) -> List[int]:
+def mmr_select(query_vec: np.ndarray, doc_vecs: list[np.ndarray], top_n: int = 6, lam: float = 0.6) -> list[int]:
     if not doc_vecs:
         return []
     q = _nz_norm(query_vec.astype(np.float32))
@@ -253,12 +252,12 @@ def search(
     client: QdrantClient,
     collection: str,
     embed_model: SentenceTransformer,
-    rerank_model: Optional[CrossEncoder],
+    rerank_model: CrossEncoder | None,
     query: str,
     top_k: int = 12,
     mmr_k: int = 6,
     score_threshold: float = 0.25,
-) -> List[Dict]:
+) -> list[dict]:
     qv = embed_model.encode([query], normalize_embeddings=True)[0].tolist()
     # Use query_points API (newer Qdrant client)
     # Pass vector list directly - Qdrant client accepts list as query

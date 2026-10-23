@@ -1,12 +1,12 @@
 """Enhanced retrieval with hybrid search (vector + BM25)."""
 
 from __future__ import annotations
-from typing import List, Dict, Optional
+
 import logging
 
-from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer, CrossEncoder
 import numpy as np
+from qdrant_client import QdrantClient
+from sentence_transformers import CrossEncoder, SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ def _normalize_vector(x: np.ndarray) -> np.ndarray:
 
 def _mmr_select(
     query_vec: np.ndarray,
-    doc_vecs: List[np.ndarray],
+    doc_vecs: list[np.ndarray],
     top_n: int = 6,
     lambda_param: float = 0.6,
-) -> List[int]:
+) -> list[int]:
     """
     Maximal Marginal Relevance selection.
 
@@ -96,10 +96,10 @@ def _mmr_select(
 
 def _bm25_search(
     query: str,
-    documents: List[str],
-    doc_indices: List[int],
+    documents: list[str],
+    doc_indices: list[int],
     top_k: int = 10,
-) -> List[Dict[str, any]]:
+) -> list[dict[str, any]]:
     """
     BM25 keyword search.
 
@@ -140,8 +140,8 @@ def _bm25_search(
                 )
 
         return results
-    except Exception as e:
-        logger.error(f"BM25 search error: {e}", exc_info=True)
+    except Exception:
+        logger.exception("BM25 search error")
         return []
 
 
@@ -155,8 +155,8 @@ def hybrid_search(
     score_threshold: float = 0.25,
     use_bm25: bool = False,
     bm25_weight: float = 0.3,
-    rerank_model: Optional[CrossEncoder] = None,
-) -> List[Dict]:
+    rerank_model: CrossEncoder | None = None,
+) -> list[dict]:
     """
     Hybrid search combining vector search with optional BM25.
 

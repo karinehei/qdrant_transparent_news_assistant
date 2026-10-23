@@ -4,4 +4,4 @@ from .base import Article, Ingestor, IngestResult
 from .rss import RSSIngestor
 from .yle import YleIngestor
 
-__all__ = ["Article", "Ingestor", "IngestResult", "RSSIngestor", "YleIngestor"]
+__all__ = ["Article", "IngestResult", "Ingestor", "RSSIngestor", "YleIngestor"]

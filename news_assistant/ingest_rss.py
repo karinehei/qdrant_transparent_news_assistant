@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict
+
 import feedparser
 import requests
 from bs4 import BeautifulSoup
@@ -14,9 +14,9 @@ def _clean_html(html: str) -> str:
     return text
 
 
-def fetch_rss(feed_url: str, publisher: str | None = None, limit: int = 30) -> List[Dict]:
+def fetch_rss(feed_url: str, publisher: str | None = None, limit: int = 30) -> list[dict]:
     d = feedparser.parse(feed_url)
-    out: List[Dict] = []
+    out: list[dict] = []
     for e in d.entries[:limit]:
         url = getattr(e, "link", None)
         title = getattr(e, "title", "") or ""

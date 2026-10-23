@@ -1,9 +1,11 @@
 """RSS feed ingestor with robust parsing and content extraction."""
 
 from __future__ import annotations
+
 import logging
 import time
-from typing import List, Optional
+from datetime import UTC
+
 import feedparser
 import requests
 from bs4 import BeautifulSoup
@@ -30,7 +32,7 @@ def _clean_html(html: str) -> str:
     return text
 
 
-def _fetch_full_content(url: str, timeout: int = 10, retries: int = 2) -> Optional[str]:
+def _fetch_full_content(url: str, timeout: int = 10, retries: int = 2) -> str | None:
     """Fetch full article content from URL with retries."""
     for attempt in range(retries + 1):
         try:
@@ -63,7 +65,7 @@ class RSSIngestor(Ingestor):
     def fetch_articles(
         self,
         source_ref: str,
-        publisher: Optional[str] = None,
+        publisher: str | None = None,
         limit: int = 30,
     ) -> IngestResult:
         """
@@ -77,8 +79,8 @@ class RSSIngestor(Ingestor):
         Returns:
             IngestResult with articles and metadata
         """
-        errors: List[str] = []
-        articles: List[Article] = []
+        errors: list[str] = []
+        articles: list[Article] = []
 
         try:
             # Parse feed with custom user agent
@@ -107,10 +109,10 @@ class RSSIngestor(Ingestor):
                     published_at = None
                     if hasattr(entry, "published_parsed") and entry.published_parsed:
                         try:
-                            from time import mktime
                             from datetime import datetime
+                            from time import mktime
 
-                            dt = datetime.fromtimestamp(mktime(entry.published_parsed))
+                            dt = datetime.fromtimestamp(mktime(entry.published_parsed), tz=UTC)
                             published_at = dt.isoformat()
                         except Exception:
                             pass
@@ -150,14 +152,14 @@ class RSSIngestor(Ingestor):
                     articles.append(article)
 
                 except Exception as e:
-                    error_msg = f"Error processing entry: {str(e)}"
+                    error_msg = f"Error processing entry: {e!s}"
                     errors.append(error_msg)
-                    logger.error(error_msg, exc_info=True)
+                    logger.exception(error_msg)
 
         except Exception as e:
-            error_msg = f"Failed to fetch RSS feed {source_ref}: {str(e)}"
+            error_msg = f"Failed to fetch RSS feed {source_ref}: {e!s}"
             errors.append(error_msg)
-            logger.error(error_msg, exc_info=True)
+            logger.exception(error_msg)
 
         return IngestResult(
             articles=articles,

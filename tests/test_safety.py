@@ -1,9 +1,9 @@
 """Test safety features."""
 
 from news_assistant.safety import (
+    any_context_is_suspicious,
     looks_like_prompt_injection,
     sanitize_context,
-    any_context_is_suspicious,
 )
 
 
