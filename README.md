@@ -159,6 +159,55 @@ The audit trail is essential for responsible AI, providing transparency and allo
 └──────────────┘    └──────────────┘    └──────────────┘
 ```
 
+## 🌐 Browser demo (GitHub Pages)
+
+An interactive, **browser-only** portfolio demo of the Transparent News Assistant UI. It runs without Python, Qdrant, PostgreSQL, Docker, API keys, or an LLM service.
+
+**Expected URL after you deploy:** https://karinehei.github.io/qdrant_transparent_news_assistant/
+
+This repository does **not** claim the demo is already live; publish it manually when ready (steps below).
+
+### What the demo shows
+
+- Prepared scenarios: supported multi-source answers, insufficient evidence, citation warnings, and prompt-injection handling
+- Clickable citations, expandable retrieval details with illustrative scores, warnings, and a local audit history
+- A persistent banner: *Interactive demo · Prepared examples · No live AI or news retrieval*
+
+### What is prepared or simulated
+
+- Answers, sources, excerpts, and scores are **deterministic synthetic data** (fictional articles; illustrative scores only)
+- Safety and citation examples **illustrate** behavior; they do **not** execute the backend’s safety or citation checks
+- Free-text is limited to documented example questions; unmatched input gets a clear “not supported” message (never an unrelated canned answer)
+
+### Demo mode vs full application
+
+| | Browser demo | Full stack |
+|---|---|---|
+| Enable | `VITE_DEMO_MODE=true` (demo build only) | Default frontend + API |
+| Data | Local prepared scenarios + `sessionStorage` | Live retrieval, LLM, audit DB |
+| Network | No backend / RSS / LLM calls | `VITE_API_URL` HTTP API |
+
+Normal builds keep the existing backend integration. Demo mode is never selected automatically after a backend failure.
+
+### Local demo build and preview
+
+```bash
+cd web
+npm ci
+npm run build:demo
+npm run preview:demo
+```
+
+Open the preview URL and append the repo base path if needed, e.g. `http://localhost:4173/qdrant_transparent_news_assistant/`.
+
+### Publish to GitHub Pages (manual)
+
+1. In the GitHub repo: **Settings → Pages → Build and deployment → Source**: GitHub Actions
+2. Actions → **Deploy GitHub Pages demo** → **Run workflow** (`workflow_dispatch` only)
+3. After success, open https://karinehei.github.io/qdrant_transparent_news_assistant/
+
+The workflow builds only `web/` with `npm run build:demo` and uploads `web/dist` (no backend, env files, or credentials).
+
 ## 🚀 Quick Start
 
 ### Prerequisites
